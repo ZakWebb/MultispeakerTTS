@@ -1,0 +1,11 @@
+**/**.exe
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Don't include speech data in git commits
+/data/
+
+# Don't include saved models
+/models/

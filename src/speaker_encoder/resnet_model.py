@@ -102,6 +102,8 @@ class ResNet(layers.Layer):
         x = self.layer4(x)
 
         x = self.avgpool(x)
+        x = tf.squeeze(x, [3])
+        x = tf.transpose(x, perm=[0, 2, 1])
 
         return x
 

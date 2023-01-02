@@ -3,7 +3,7 @@ import os
 import torch
 import utils
 from modules.FastDiff.module.FastDiff_model import FastDiff
-from tasks.vocoder.vocoder_base import VocoderBaseTask
+from vocoder.vocoder_base import VocoderBaseTask
 from utils import audio
 from utils.hparams import hparams
 from modules.FastDiff.module.util import theta_timestep_loss, compute_hyperparams_given_schedule, sampling_given_noise_schedule

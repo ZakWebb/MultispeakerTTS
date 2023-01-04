@@ -8,6 +8,7 @@ Github References:
 - [soobinseo/Transformer-TTS](https://github.com/soobinseo/Transformer-TTS)
 - [xcmyz/FastSpeech](https://github.com/xcmyz/FastSpeech)
 - [NVIDIA/waveglow](https://github.com/NVIDIA/waveglow)
+- [KevinMIN95/StyleSpeech](https://github.com/KevinMIN95/StyleSpeech)
 
 Paper References:
 

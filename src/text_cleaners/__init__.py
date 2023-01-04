@@ -1,7 +1,9 @@
 """ from https://github.com/keithito/tacotron """
 import re
-from text import cleaners
-from text.symbols import symbols
+from text_cleaners import cleaners
+from text_cleaners.symbols import symbols
+from base_text_cleaner import BaseTextCleaner
+from english_cleaner import EnglishCleaner
 
 
 # Mappings from symbol to numeric ID and vice versa:
@@ -53,7 +55,6 @@ def sequence_to_text(sequence):
                 s = '{%s}' % s[1:]
             result += s
     return result.replace('}{', ' ')
-
 
 def _clean_text(text, cleaner_names):
     for name in cleaner_names:

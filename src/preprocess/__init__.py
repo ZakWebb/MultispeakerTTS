@@ -1,1 +1,1 @@
-from base_preprocess import BasePreprocess
+from base_preprocess import BasePreprocess, get_preprocessor_cls

@@ -1,15 +1,14 @@
-import importlib
-from utils.hparams import set_hparams, hparams
+from utils.set_configs import set_config
+from tasks import get_task
 
 
-def run_task():
-    assert hparams['task_cls'] != ''
-    pkg = ".".join(hparams["task_cls"].split(".")[:-1])
-    cls_name = hparams["task_cls"].split(".")[-1]
-    task_cls = getattr(importlib.import_module(pkg), cls_name)
-    task_cls.start()
+def run_task(config):
+    task = get_task(config)
+    task_cls = task(config)
+    runnable_task = task_cls(config)
+    runnable_task.start()
 
 
 if __name__ == '__main__':
-    set_hparams()
-    run_task()
+    config = set_config()
+    run_task(config)

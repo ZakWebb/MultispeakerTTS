@@ -1,4 +1,4 @@
-from base_conversion import BaseConversion
+from tasks.base_conversion import BaseConversion
 import importlib
 
 _CLEANERS = {}
@@ -10,15 +10,15 @@ def register_cleaner(cls):
     return cls
 
 
-def get_cleaner_cls(hparams):
-    if hparams['cleaner'] in _CLEANERS:
-        return _CLEANERS[hparams['cleaner']]
+def get_cleaner_cls(cls):
+    if cls in _CLEANERS:
+        return _CLEANERS[cls]
     else:
-        preprocessor_cls = hparams['cleaner']
-        pkg = ".".join(preprocessor_cls.split(".")[:-1])
-        cls_name =preprocessor_cls.split(".")[-1]
-        preprocessor_cls = getattr(importlib.import_module(pkg), cls_name)
-        return preprocessor_cls
+        cleaner_cls = cls
+        pkg = ".".join(cleaner_cls.split(".")[:-1])
+        cls_name =cleaner_cls.split(".")[-1]
+        cleaner_cls = getattr(importlib.import_module(pkg), cls_name)
+        return cleaner_cls
 
 class BaseTextCleaner(BaseConversion):
     def convert(self, text):

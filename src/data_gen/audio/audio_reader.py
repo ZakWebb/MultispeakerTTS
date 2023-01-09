@@ -1,19 +1,22 @@
-from .tools import get_mel_from_wav
-from .stft import TacotronSTFT
+from data_gen.audio.tools import get_mel_from_wav
+from data_gen.audio.stft import TacotronSTFT
 import librosa
+import soundfile as sf
 import numpy as np
 import os
 from scipy.io import wavfile
+import torch
 
 class AudioReader(object):
     def __init__(self, config):
-        self.target_sr = config["sample rate"]
-        self.stft = TacotronSTFT(config["filter length"], config["hop length"], \
-            config["win_length"], config["n_mel_channels"], self.target_sr)
-        self.top_db = config.get("top db")
+        self.target_sr = config["sample_rate"]
+        self.stft = TacotronSTFT(config["filter_length"], config["hop_length"], \
+            config["window_length"], config["n_mel_channels"], self.target_sr)
+        self.top_db = config.get("top_db")
+        self.norm = config.get("norm")
 
     def load_wav(self, dir, name):
-        self.audio, self.current_sr = librosa.load(os.join(dir, name + ".wav"))
+        self.audio, self.current_sr = librosa.load(os.path.join(dir, name + ".wav"))
         self.processed = False
         self.computed_mel = False
 
@@ -22,7 +25,7 @@ class AudioReader(object):
         if self.processed:
             return
         if self.current_sr != self.target_sr:
-            self.audio = librosa.resample(self.audio, self.current_sr, self.target_sr)
+            self.audio = librosa.resample(self.audio, orig_sr=self.current_sr, target_sr=self.target_sr)
             self.current_sr = self.target_sr
         if self.top_db is not None:
             trimmed, _ = librosa.effects.trim(self.audio, top_db = self.top_db)
@@ -34,11 +37,14 @@ class AudioReader(object):
             wav = self.audio / np.abs(self.audio).max()
         wav *= 32767
         # proposed by @dsmiller
-        wavfile.write(os.join(dir, name + ".wav"), self.current_sr, wav.astype(np.int16))
+        sf.write(os.path.join(dir, name + ".wav"), wav.astype(np.int16), self.current_sr)
 
     def save_mel(self, dir, name):
         if not self.computed_mel:
-            self.mel = self.stft.mel_spectrogram(self.audio)
+            audio = torch.from_numpy(self.audio)
+            audio = audio[None, :]
+            mel, _ = self.stft.mel_spectrogram(audio)
+            self.mel = torch.squeeze(mel)
             self.computed_mel = True
-        np.save(os.join(dir, name), self.mel)
+        torch.save(self.mel, os.path.join(dir, name + ".mel"))
         

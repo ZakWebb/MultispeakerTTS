@@ -1,0 +1,9 @@
+base_config: "../config_base.yaml"
+task: "preprocess"
+
+###################
+# Train/Valid/Test Percentages
+###################
+
+train_percentage: 0.8
+valid_percentage: 0.1

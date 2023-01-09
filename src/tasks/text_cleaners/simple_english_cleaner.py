@@ -1,11 +1,12 @@
 import re
 from unidecode import unidecode
-from .numbers import normalize_numbers
-from .base_text_cleaner import BaseTextCleaner, register_cleaner
+from tasks.text_cleaners.numbers import normalize_numbers
+from tasks.text_cleaners.base_text_cleaner import BaseTextCleaner, register_cleaner
 
 @register_cleaner
-class EnglishCleaner(BaseTextCleaner):
-    def __init__(self):
+class SimpleEnglishCleaner(BaseTextCleaner):
+    def __init__(self, config):
+        super(SimpleEnglishCleaner, self).__init__(config)
         self.cleaner = english_cleaners
 
     def convert(self, text):

@@ -1,0 +1,21 @@
+base_config: "preprocess_base.yaml"
+preprocessor: "LJSpeech"
+
+###################
+# Data Directories
+###################
+
+raw_data_folder: "D:/Speech Data/Test/"
+data_folder: "D:/Speech Data/Test/Processed Data/"
+
+###################
+# Text Cleaner
+###################
+
+cleaner: "Simple English"
+
+###################
+# Text to Phoneme
+###################
+
+text_to_phoneme: "Simple English"

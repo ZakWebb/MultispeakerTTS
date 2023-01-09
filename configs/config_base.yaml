@@ -1,0 +1,15 @@
+
+
+###################
+# Audio and Mel
+###################
+
+sample_rate: 16000
+filter_length: 1024
+hop_length: 256
+window_length: 1024
+mel_fmin: 0.0
+mel_fmax: 8000.0
+n_mel_channels: 80
+# top_db:
+norm: True

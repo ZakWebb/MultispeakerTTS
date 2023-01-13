@@ -14,11 +14,15 @@ class AudioReader(object):
             config["window_length"], config["n_mel_channels"], self.target_sr)
         self.top_db = config.get("top_db")
         self.norm = config.get("norm")
+        self.audio = np.empty(0)
 
     def load_wav(self, dir, name):
         self.audio, self.current_sr = librosa.load(os.path.join(dir, name + ".wav"))
         self.processed = False
         self.computed_mel = False
+
+    def get_wav(self):
+        return self.audio
 
     
     def process_wav(self):

@@ -1,8 +1,10 @@
 import torch
+from torch.utils.data import DataLoader
 from glob import glob
 
 from tasks.base_conversion import BaseConversion
 from tasks.base_lightning import BaseLit
+from tasks.base_task import BaseTask
 VOCODERS = {}
 
 
@@ -15,28 +17,22 @@ def register_vocoder(cls):
 def get_vocoder_cls(config):
     if config['vocoder'] in VOCODERS:
         return VOCODERS[config['vocoder']]
-    name = config['vocoder']
-    raise ValueError("Vocoder {name} is not a recognized vocoder.")
+    raise ValueError("Vocoder {name} is not a recognized vocoder.".format(name=config["vocoder"]))
 
 
-class BaseVocoder(BaseConversion, BaseLit):
+class BaseVocoder(BaseLit):
     def __init__(self, config):
-        super(self).__init__(config)
+        self.input = "mels"
+        self.output = "wavs"
 
-        self.train_loader = None
-        self.valid_loader = None
-        self.test_loader = None
+        super(BaseVocoder, self).__init__(config)
 
         if not self.trainable and self.load_ckpt:
             self.model = get_vocoder_cls(config).load_from_checkpoint(self.ckpt)
         else:
-            self.model = get_vocoder_cls(config)(config)
+            self.model = get_vocoder_cls(config)(config["vocoder_config"])
 
-    def convert(self, phonemes):
-        self.model.eval()
-        with torch.no_grad():
-            output = self.model(phonemes)
-        return output
+    
     
     def get_ckpt(self, config):
         ckpt = config.get("ckpt")
@@ -48,3 +44,14 @@ class BaseVocoder(BaseConversion, BaseLit):
                 ckpt = ckpts[0]
         
         return ckpt
+
+class VocoderTask(BaseTask):
+    def __init__(self, config):
+        super(VocoderTask, self).__init__()
+        self.vocoder = BaseVocoder(config)
+        self.train = config["train"]
+    
+    def start(self):
+        if self.train:
+            self.vocoder.train()
+        

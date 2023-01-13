@@ -31,8 +31,8 @@ class BasePreprocessTask(BaseTask):
     def __init__(self, config):
         super(BasePreprocessTask, self).__init__()
     
-        self.raw_data_folder = config["raw_data_folder"]
-        self.data_folder = config["data_folder"]
+        self.raw_data_dir = config["raw_data_dir"]
+        self.data_dir = config["data_dir"]
         self.sample_rate = config["sample_rate"]
         #self.meta_data = self.get_meta_data(config)
 
@@ -51,16 +51,16 @@ class BasePreprocessTask(BaseTask):
         self.t2p = get_t2p(config)(config)
 
     
-    def build_folders(self):
-        os.makedirs(self.data_folder, exist_ok = True)
+    def build_dirs(self):
+        os.makedirs(self.data_dir, exist_ok = True)
         for split in {"train", "valid", "test"}:
-            os.makedirs(os.path.join(self.data_folder, split), exist_ok = True)
+            os.makedirs(os.path.join(self.data_dir, split), exist_ok = True)
             for type in _NEEDED_DATA:
-                os.makedirs(os.path.join(self.data_folder, split, type), exist_ok = True)
+                os.makedirs(os.path.join(self.data_dir, split, type), exist_ok = True)
 
     def build_files(self):
         raise NotImplemented
     
     def start(self):
-        self.build_folders()
+        self.build_dirs()
         self.build_files()

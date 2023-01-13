@@ -1,0 +1,13 @@
+base_config: "../config_base.yaml"
+task: "vocoder"
+vocoder: "HiFiGAN"
+
+model_config: "HiFiGAN_model.yaml"
+data_dir: "D:/Speech Data/Test/Processed Data/"
+work_dir: "../models"
+
+trainable: true
+train: true
+
+batch_size: 2
+shuffle: true

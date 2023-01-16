@@ -15,9 +15,10 @@ class AudioReader(object):
         self.top_db = config.get("top_db")
         self.norm = config.get("norm")
         self.audio = np.empty(0)
+        self.processed = True
 
     def load_wav(self, dir, name):
-        self.audio, self.current_sr = librosa.load(os.path.join(dir, name + ".wav"))
+        self.audio, self.current_sr = librosa.load(os.path.join(dir, name + ".wav"), sr=self.target_sr)
         self.processed = False
         self.computed_mel = False
 
@@ -28,11 +29,9 @@ class AudioReader(object):
     def process_wav(self):
         if self.processed:
             return
-        if self.current_sr != self.target_sr:
-            self.audio = librosa.resample(self.audio, orig_sr=self.current_sr, target_sr=self.target_sr)
-            self.current_sr = self.target_sr
         if self.top_db is not None:
             trimmed, _ = librosa.effects.trim(self.audio, top_db = self.top_db)
+        self.audio /= 32767
 
         self.processed = True
     
@@ -44,6 +43,8 @@ class AudioReader(object):
         sf.write(os.path.join(dir, name + ".wav"), wav.astype(np.int16), self.current_sr)
 
     def save_mel(self, dir, name):
+        if not self.processed:
+            self.process_wav()
         if not self.computed_mel:
             audio = torch.from_numpy(self.audio)
             audio = audio[None, :]

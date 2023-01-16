@@ -2,12 +2,18 @@ base_config: "../config_base.yaml"
 task: "vocoder"
 vocoder: "HiFiGAN"
 
-model_config: "HiFiGAN_model.yaml"
-data_dir: "D:/Speech Data/Test/Processed Data/"
+model_config: "HiFiGAN_model_v2.yaml"
+data_dir: "D:/Speech Data/LJ/LJSpeech-1.1/Processed_Data"
 work_dir: "../models"
+save_top_k: 5
+save_last_k: 10
 
 trainable: true
 train: true
 
-batch_size: 2
+batch_size: 2 # Error happens if this is one.  Need to figure out what the problem is
 shuffle: true
+
+num_workers: 4
+use_gpu: true
+pin_memory: true

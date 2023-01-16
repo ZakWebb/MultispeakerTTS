@@ -5,8 +5,8 @@ preprocessor: "LJSpeech"
 # Data Directories
 ###################
 
-raw_data_dir: "D:/Speech Data/Test/"
-data_dir: "D:/Speech Data/Test/Processed Data/"
+raw_data_dir: "D:/Speech Data/LJ/LJSpeech-1.1"
+data_dir: "D:/Speech Data/LJ/LJSpeech-1.1/Processed_Data"
 
 ###################
 # Text Cleaner

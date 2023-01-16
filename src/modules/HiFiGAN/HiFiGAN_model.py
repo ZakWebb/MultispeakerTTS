@@ -109,6 +109,7 @@ class Generator(torch.nn.Module):
         x = F.leaky_relu(x)
         x = self.conv_post(x)
         x = torch.tanh(x)
+        x = torch.squeeze(x)
 
         return x
 
@@ -140,12 +141,12 @@ class DiscriminatorP(torch.nn.Module):
         fmap = []
 
         # 1d to 2d
-        b, c, t = x.shape
+        b, t = x.shape
         if t % self.period != 0: # pad first
             n_pad = self.period - (t % self.period)
             x = F.pad(x, (0, n_pad), "reflect")
             t = t + n_pad
-        x = x.view(b, c, t // self.period, self.period)
+        x = x.view(b, 1, t // self.period, self.period)
 
         for l in self.convs:
             x = l(x)
@@ -154,6 +155,7 @@ class DiscriminatorP(torch.nn.Module):
         x = self.conv_post(x)
         fmap.append(x)
         x = torch.flatten(x, 1, -1)
+        x = torch.squeeze(x)
 
         return x, fmap
 
@@ -232,6 +234,10 @@ class MultiScaleDiscriminator(torch.nn.Module):
         y_d_gs = []
         fmap_rs = []
         fmap_gs = []
+        # in the orignal paper, there was a channel dimension that we don't have
+        # increasing dimension to take this into account
+        y = torch.unsqueeze(y, 1)
+        y_hat = torch.unsqueeze(y_hat, 1)
         for i, d in enumerate(self.discriminators):
             if i != 0:
                 y = self.meanpools[i-1](y)
@@ -250,6 +256,16 @@ def feature_loss(fmap_r, fmap_g):
     loss = 0
     for dr, dg in zip(fmap_r, fmap_g):
         for rl, gl in zip(dr, dg):
+            if rl.size(2) > gl.size(2):
+                temp = rl
+                rl = gl
+                gl = temp
+            if len(rl.size()) == 4:
+                pad = (0,0,0,gl.size(2) - rl.size(2))
+            else:
+                pad = (0,gl.size(2) - rl.size(2))
+            rl = F.pad(rl, pad, "constant", 0)
+            
             loss += torch.mean(torch.abs(rl - gl))
 
     return loss*2
@@ -257,16 +273,16 @@ def feature_loss(fmap_r, fmap_g):
 
 def discriminator_loss(disc_real_outputs, disc_generated_outputs):
     loss = 0
-    r_losses = []
-    g_losses = []
+#    r_losses = []
+#    g_losses = []
     for dr, dg in zip(disc_real_outputs, disc_generated_outputs):
         r_loss = torch.mean((1-dr)**2)
         g_loss = torch.mean(dg**2)
         loss += (r_loss + g_loss)
-        r_losses.append(r_loss.item())
-        g_losses.append(g_loss.item())
+#        r_losses.append(r_loss.item())
+#        g_losses.append(g_loss.item())
 
-    return loss, r_losses, g_losses
+    return loss#, r_losses, g_losses
 
 def cond_discriminator_loss(outputs):
     loss = 0
@@ -279,10 +295,10 @@ def cond_discriminator_loss(outputs):
 
 def generator_loss(disc_outputs):
     loss = 0
-    gen_losses = []
+    # gen_losses = []
     for dg in disc_outputs:
         l = torch.mean((1-dg)**2)
-        gen_losses.append(l)
+      #  gen_losses.append(l)
         loss += l
 
-    return loss, gen_losses
+    return loss#, gen_losses

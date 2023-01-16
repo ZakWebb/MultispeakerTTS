@@ -60,11 +60,12 @@ class STFT(torch.nn.Module):
             mode='reflect')
         input_data = input_data.squeeze(1)
 
+
         forward_transform = F.conv1d(
-            input_data.cuda(),
-            Variable(self.forward_basis, requires_grad=False).cuda(),
+            input_data,
+            Variable(self.forward_basis, requires_grad=False),
             stride=self.hop_length,
-            padding=0).cpu()
+            padding=0)
 
         cutoff = int((self.filter_length / 2) + 1)
         real_part = forward_transform[:, :cutoff, :]

@@ -35,10 +35,12 @@ class HiFiGAN(LightningModule):
     
     def training_step(self, batch, batch_idx, optimizer_idx) :
         true_mels, true_wav =  batch
-
         gen_wav = self.generator(true_mels)
 
-        gen_mels = self.stft.mel_spectrogram(gen_wav)
+        gen_mels, _ = self.stft.mel_spectrogram(gen_wav)
+
+        # this is an issue I'll need to figure out eventually, whe are the generated mels too big?
+        gen_mels = torch.narrow(gen_mels,2,0,true_mels.size(2))
 
         gen_df_r, gen_df_g, fmap_f_r, fmap_f_g = self.period_discriminator(true_wav, gen_wav)
         gen_ds_r, gen_ds_g, fmap_s_r, fmap_s_g = self.scale_disciminator(true_wav, gen_wav)
@@ -47,12 +49,11 @@ class HiFiGAN(LightningModule):
         if optimizer_idx == 0:
             loss_mel = F.l1_loss(true_mels, gen_mels) * 45 # This constant is annoying, but is included in the paper
 
-
             loss_fm_f = feature_loss(fmap_f_r, fmap_f_g)
             loss_fm_s = feature_loss(fmap_s_r, fmap_s_g)
-            
-            loss_gen_f, losses_gen_f = generator_loss(gen_df_g)
-            loss_gen_s, losses_gen_s = generator_loss(gen_ds_g)
+
+            loss_gen_f = generator_loss(gen_df_g)
+            loss_gen_s = generator_loss(gen_ds_g)
 
             loss_gen_all = loss_gen_s + loss_gen_f + loss_fm_s + loss_fm_f + loss_mel
 
@@ -60,8 +61,8 @@ class HiFiGAN(LightningModule):
 
         # train discriminator
         if optimizer_idx == 1:
-            loss_disc_f, losses_disc_f_r, losses_disc_f_g = discriminator_loss(gen_df_r, gen_df_g)
-            loss_disc_s, losses_disc_s_r, losses_disc_s_g = discriminator_loss(gen_ds_r, gen_ds_g)
+            loss_disc_f = discriminator_loss(gen_df_r, gen_df_g)
+            loss_disc_s = discriminator_loss(gen_ds_r, gen_ds_g)
 
             loss_disc_all = loss_disc_s + loss_disc_f
 
@@ -73,7 +74,9 @@ class HiFiGAN(LightningModule):
 
         gen_wavs = self.generator(true_mels)
 
-        gen_mels = self.stft.mel_spectrogram(gen_wavs)
+        gen_mels, _ = self.stft.mel_spectrogram(gen_wavs)
+
+        gen_mels = torch.narrow(gen_mels,2,0,true_mels.size(2))
 
         val_err_tot = F.l1_loss(true_mels, gen_mels)
         self.log("val_loss", val_err_tot)
@@ -83,7 +86,9 @@ class HiFiGAN(LightningModule):
 
         gen_wavs = self.generator(true_mels)
 
-        gen_mels = self.stft.mel_spectrogram(gen_wavs)
+        gen_mels, _ = self.stft.mel_spectrogram(gen_wavs)
+
+        gen_mels = torch.narrow(gen_mels,2,0,true_mels.size(2))
 
         test_err_tot = F.l1_loss(true_mels, gen_mels)
         self.log("test_loss", test_err_tot)
@@ -97,3 +102,7 @@ class HiFiGAN(LightningModule):
             lr=self.lr, betas=(self.b1, self.b2))
 
         return [opt_g, opt_d], []
+    
+    def training_epoch_end(self, training_step_outputs):
+        self.log("global_step", torch.tensor([self.global_step]).float().item())  # there's probably a better way to convert ints to float32s, but I odn't know it
+        return super().training_epoch_end(training_step_outputs)

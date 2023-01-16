@@ -3,6 +3,7 @@ from tasks.preprocess.base_preprocess_task import BasePreprocessTask, register_p
 import os
 import random
 import json
+import tqdm
 
 @register_preprocessor
 class LJSpeechPreprocess(BasePreprocessTask):
@@ -13,7 +14,7 @@ class LJSpeechPreprocess(BasePreprocessTask):
 
     def get_text(self):
         texts = []
-        with open(os.path.join(self.raw_data_folder, "metadata.csv"), "r") as f:
+        with open(os.path.join(self.raw_data_dir, "metadata.csv"), "r", encoding="utf-8") as f:
             for line in f:
                 parts = line.strip().split("|")
                 texts.append((parts[0], parts[1]))
@@ -29,22 +30,22 @@ class LJSpeechPreprocess(BasePreprocessTask):
         for type in {"train", "valid", "test"}:
             texts = self.texts[type]
             current_ids = []
-            for id, text in texts:
+            for id, text in tqdm(texts, desc="Working on {} inputs".format(type)):
                 current_ids.append(id)
-                with open(os.path.join(self.data_folder, type, "raw_text", id + ".txt"), "w") as f:
+                with open(os.path.join(self.data_dir, type, "raw_text", id + ".txt"), "w") as f:
                     f.write(text)
                 cleaned_text = self.cleaner.convert(text)
-                with open(os.path.join(self.data_folder, type, "cleaned_text", id + ".txt"), "w") as f:
+                with open(os.path.join(self.data_dir, type, "cleaned_text", id + ".txt"), "w") as f:
                     f.write(cleaned_text)
                 phonemes = self.t2p.convert(cleaned_text)
-                with open(os.path.join(self.data_folder, type, "phonemes", id + ".json"), "w") as f:
+                with open(os.path.join(self.data_dir, type, "phonemes", id + ".json"), "w") as f:
                     json.dump(phonemes, f, indent=2)
-                self.audio.load_wav(os.path.join(self.raw_data_folder, "wavs"), id)
+                self.audio.load_wav(os.path.join(self.raw_data_dir, "wavs"), id)
                 self.audio.process_wav()
-                self.audio.save_wav(os.path.join(self.data_folder, type, "wavs"), id)
-                self.audio.save_mel(os.path.join(self.data_folder, type, "mels"), id)
+                self.audio.save_wav(os.path.join(self.data_dir, type, "wavs"), id)
+                self.audio.save_mel(os.path.join(self.data_dir, type, "mels"), id)
             
-            with open(os.path.join(self.data_folder, type, type + "_metadata.csv"), "w") as f:
+            with open(os.path.join(self.data_dir, type, type + "_metadata.csv"), "w") as f:
                 for id in current_ids:
                     f.write(id + "\n")
 

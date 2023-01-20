@@ -1,6 +1,7 @@
 import os
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, DeviceStatsMonitor, TQDMProgressBar
+from pytorch_lightning.profilers import AdvancedProfiler, PyTorchProfiler, SimpleProfiler
 import torch
 from torch.utils.data import DataLoader
 
@@ -16,6 +17,7 @@ class BaseLit(BaseConversion):
 
         self.ckpt_dir = os.path.join(config["work_dir"], config["task"], config[config["task"] + "_config"]["model_name"])
         self.ckpt = self.get_ckpt(config)
+        self.load_ckpt = config.get("load_ckpt", False)
 
         self.num_workers = config["num_workers"]
 
@@ -27,8 +29,8 @@ class BaseLit(BaseConversion):
             self.pin_memory = False
         self.devices = 1
 
+        self.accumulate_gradient = config.get("accumulate_gradient", 1)
 
-        
         self.batch_size = config["batch_size"]
         self.shuffle = config["shuffle"]
 
@@ -45,7 +47,8 @@ class BaseLit(BaseConversion):
 
         self.model = None
 
-        self.ckpt_callbacks = []
+        self.ckpt_callbacks = [#DeviceStatsMonitor(),
+                                TQDMProgressBar(refresh_rate=10)]
 
         if config.get("save_top_k") is not None:
             self.ckpt_callbacks.append(ModelCheckpoint(save_top_k=config["save_top_k"],
@@ -62,12 +65,19 @@ class BaseLit(BaseConversion):
                                         
 
 
-        self.trainer = pl.Trainer(callbacks=self.ckpt_callbacks, accelerator=self.accelerator, devices=self.devices,default_root_dir=self.ckpt_dir,profiler="Simple")
+        self.trainer = pl.Trainer(callbacks=self.ckpt_callbacks, 
+                                    accelerator=self.accelerator, 
+                                    devices=self.devices,
+                                    default_root_dir=self.ckpt_dir,
+                                    accumulate_grad_batches=self.accumulate_gradient,
+                                    log_every_n_steps=25
+    #                                profiler=AdvancedProfiler(dirpath=self.ckpt_dir, filename="perf_logs")
+                                )
 
     def train(self):
         if self.trainable:
             self.trainer.fit(self.model, self.train_loader, self.valid_loader, ckpt_path=self.ckpt)
-            self.trainer.test(self.model, self.test_loader)
+#            self.trainer.test(self.model, self.test_loader)
         else:
             ValueError("Trying to train model {self.model.name} when not trainable.")
     

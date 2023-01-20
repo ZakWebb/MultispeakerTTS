@@ -1,9 +1,9 @@
 import itertools
 import torch
 import torch.nn.functional as F
-from pytorch_lightning import LightningModule, Trainer
+from pytorch_lightning import LightningModule
 
-from modules.HiFiGAN.HiFiGAN_model import Generator, MultiPeriodDiscriminator, MultiScaleDiscriminator, discriminator_loss, feature_loss, generator_loss
+from modules.HiFiGAN.HiFiGAN_model import Generator, MultiPeriodDiscriminator, MultiScaleDiscriminator, discriminator_loss, feature_loss_3, feature_loss_4, generator_loss
 from tasks.vocoders.base_vocoder import register_vocoder
 from data_gen.audio.stft import TacotronSTFT
 
@@ -37,7 +37,7 @@ class HiFiGAN(LightningModule):
         true_mels, true_wav =  batch
         gen_wav = self.generator(true_mels)
 
-        gen_mels, _ = self.stft.mel_spectrogram(gen_wav)
+        gen_mels, _ = self.stft.unsafe_mel_spectrogram(gen_wav)
 
         # this is an issue I'll need to figure out eventually, whe are the generated mels too big?
         gen_mels = torch.narrow(gen_mels,2,0,true_mels.size(2))
@@ -47,15 +47,17 @@ class HiFiGAN(LightningModule):
         
         # train generator
         if optimizer_idx == 0:
-            loss_mel = F.l1_loss(true_mels, gen_mels) * 45 # This constant is annoying, but is included in the paper
+            loss_mel = F.l1_loss(true_mels, gen_mels) # This constant is annoying, but is included in the paper
 
-            loss_fm_f = feature_loss(fmap_f_r, fmap_f_g)
-            loss_fm_s = feature_loss(fmap_s_r, fmap_s_g)
+            loss_fm_f = feature_loss_4(fmap_f_r, fmap_f_g)
+            loss_fm_s = feature_loss_3(fmap_s_r, fmap_s_g)
 
             loss_gen_f = generator_loss(gen_df_g)
             loss_gen_s = generator_loss(gen_ds_g)
 
-            loss_gen_all = loss_gen_s + loss_gen_f + loss_fm_s + loss_fm_f + loss_mel
+            loss_gen_all = loss_gen_s + loss_gen_f + loss_fm_s + loss_fm_f + 45 * loss_mel
+            
+            self.log("train_mel_loss", loss_mel)
 
             return loss_gen_all
 
@@ -74,7 +76,7 @@ class HiFiGAN(LightningModule):
 
         gen_wavs = self.generator(true_mels)
 
-        gen_mels, _ = self.stft.mel_spectrogram(gen_wavs)
+        gen_mels, _ = self.stft.unsafe_mel_spectrogram(gen_wavs)
 
         gen_mels = torch.narrow(gen_mels,2,0,true_mels.size(2))
 
@@ -86,7 +88,7 @@ class HiFiGAN(LightningModule):
 
         gen_wavs = self.generator(true_mels)
 
-        gen_mels, _ = self.stft.mel_spectrogram(gen_wavs)
+        gen_mels, _ = self.stft.unsafe_mel_spectrogram(gen_wavs)
 
         gen_mels = torch.narrow(gen_mels,2,0,true_mels.size(2))
 

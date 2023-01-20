@@ -158,6 +158,7 @@ class TimeAware_LVCBlock(torch.nn.Module):
         self.cond_hop_length = cond_hop_length
         self.conv_layers = conv_layers
         self.conv_kernel_size = conv_kernel_size
+        self.upsample_ratio = upsample_ratio
         self.convs = torch.nn.ModuleList()
 
         self.upsample = torch.nn.ConvTranspose1d(in_channels, in_channels,
@@ -199,14 +200,20 @@ class TimeAware_LVCBlock(torch.nn.Module):
         x, audio_down, c, noise_embedding = data
         batch, in_channels, in_length = x.shape
 
+        audio_length = audio_down.size(2)
+        audio_down = audio_down[:,:,:audio_length - (audio_length % self.cond_hop_length) ]
+        c = c[:, :, :in_length]
+
         noise = (self.fc_t(noise_embedding)).unsqueeze(-1)  # (B, 80)
+
         condition = c + noise  # (B, 80, T)
         kernels, bias = self.kernel_predictor(condition)
+
         x = F.leaky_relu(x, 0.2)
         x = self.upsample(x)
 
         for i in range(self.conv_layers):
-            x += audio_down
+            x += audio_down  # modified to deal with the fact that the downsampling might remove the trailing bits of x
             y = F.leaky_relu(x, 0.2)
             y = self.convs[i](y)
             y = F.leaky_relu(y, 0.2)
@@ -231,7 +238,6 @@ class TimeAware_LVCBlock(torch.nn.Module):
         '''
         batch, in_channels, in_length = x.shape
         batch, in_channels, out_channels, kernel_size, kernel_length = kernel.shape
-
 
         assert in_length == (kernel_length * hop_size), "length of (x, kernel) is not matched"
 

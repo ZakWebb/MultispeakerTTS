@@ -99,17 +99,13 @@ class Generator(torch.nn.Module):
         for i in range(self.num_upsamples):
             x = F.leaky_relu(x, self.lrelu_slope)
             x = self.ups[i](x)
-            xs = None
+            xs = 0
             for j in range(self.num_kernels):
-                if xs is None:
-                    xs = self.resblocks[i*self.num_kernels+j](x)
-                else:
-                    xs += self.resblocks[i*self.num_kernels+j](x)
+                xs += self.resblocks[i*self.num_kernels+j](x)
             x = xs / self.num_kernels
         x = F.leaky_relu(x)
         x = self.conv_post(x)
         x = torch.tanh(x)
-        x = torch.squeeze(x)
 
         return x
 
@@ -126,7 +122,7 @@ class DiscriminatorP(torch.nn.Module):
     def __init__(self, period, kernel_size=5, stride=3, use_spectral_norm=False, lrelu_slope=0.1):
         super(DiscriminatorP, self).__init__()
         self.period = period
-        self.lrelu_slope=0.1
+        self.lrelu_slope=lrelu_slope
         norm_f = weight_norm if use_spectral_norm == False else spectral_norm
         self.convs = nn.ModuleList([
             norm_f(Conv2d(1, 32, (kernel_size, 1), (stride, 1), padding=(get_padding(5, 1), 0))),
@@ -141,12 +137,12 @@ class DiscriminatorP(torch.nn.Module):
         fmap = []
 
         # 1d to 2d
-        b, t = x.shape
+        b, c, t = x.shape
         if t % self.period != 0: # pad first
             n_pad = self.period - (t % self.period)
             x = F.pad(x, (0, n_pad), "reflect")
             t = t + n_pad
-        x = x.view(b, 1, t // self.period, self.period)
+        x = x.view(b, c, t // self.period, self.period)
 
         for l in self.convs:
             x = l(x)
@@ -155,7 +151,6 @@ class DiscriminatorP(torch.nn.Module):
         x = self.conv_post(x)
         fmap.append(x)
         x = torch.flatten(x, 1, -1)
-        x = torch.squeeze(x)
 
         return x, fmap
 
@@ -236,8 +231,6 @@ class MultiScaleDiscriminator(torch.nn.Module):
         fmap_gs = []
         # in the orignal paper, there was a channel dimension that we don't have
         # increasing dimension to take this into account
-        y = torch.unsqueeze(y, 1)
-        y_hat = torch.unsqueeze(y_hat, 1)
         for i, d in enumerate(self.discriminators):
             if i != 0:
                 y = self.meanpools[i-1](y)
@@ -252,24 +245,28 @@ class MultiScaleDiscriminator(torch.nn.Module):
         return y_d_rs, y_d_gs, fmap_rs, fmap_gs
 
 
-def feature_loss(fmap_r, fmap_g):
+def feature_loss_3(fmap_r, fmap_g):
     loss = 0
     for dr, dg in zip(fmap_r, fmap_g):
         for rl, gl in zip(dr, dg):
-            if rl.size(2) > gl.size(2):
-                temp = rl
-                rl = gl
-                gl = temp
-            if len(rl.size()) == 4:
-                pad = (0,0,0,gl.size(2) - rl.size(2))
-            else:
-                pad = (0,gl.size(2) - rl.size(2))
-            rl = F.pad(rl, pad, "constant", 0)
+            # pad = (0,gl.size(2) - rl.size(2))
+            # rl = F.pad(rl, pad, "constant", 0)
             
-            loss += torch.mean(torch.abs(rl - gl))
+            loss += torch.mean(torch.abs(rl - gl[:,:,:rl.size(2)]))
 
     return loss*2
 
+
+def feature_loss_4(fmap_r, fmap_g):
+    loss = 0
+    for dr, dg in zip(fmap_r, fmap_g):
+        for rl, gl in zip(dr, dg):
+            # pad = (0,0,0,gl.size(2) - rl.size(2))
+            # rl = F.pad(rl, pad, "constant", 0)
+            
+            loss += torch.mean(torch.abs(rl - gl[:,:, :rl.size(2),:]))
+
+    return loss*2
 
 def discriminator_loss(disc_real_outputs, disc_generated_outputs):
     loss = 0

@@ -28,7 +28,7 @@ def TTSDataset_collater(input, output, data):
 
 def collater(datatype, data):
     cur_data=[]
-    if datatype == "mels":
+    if datatype in {"mels", "wavs"}:
         for point in data:
             cur_data.append(torch.transpose(point,0,1))
     else:
@@ -36,7 +36,7 @@ def collater(datatype, data):
             
     collated = pad_sequence(cur_data, batch_first=True)
 
-    if datatype == "mels":
+    if datatype in  {"mels", "wavs"}:
         collated = torch.transpose(collated, 1, 2)
 
     return collated
@@ -76,7 +76,7 @@ class TTSDataset(Dataset):
         if datatype == "wavs":
             self.audio.load_wav(os.path.join(self.data_dir, datatype), name)
             data = self.audio.get_wav()
-            data = torch.from_numpy(data)
+            data = torch.from_numpy(data).unsqueeze(0)
         elif datatype == "mels":
             filename = filename + ".mel"
             data = torch.load(filename)

@@ -16,4 +16,4 @@ upsample_initial_channel: 256
 resblock_kernel_sizes: [3,5,7]
 resblock_dilation_sizes: [[1,2], [2,6], [3,12]]
 
-base_config: "../config_base.yaml"
+base_config: "../../config_base.yaml"

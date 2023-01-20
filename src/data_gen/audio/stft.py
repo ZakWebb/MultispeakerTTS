@@ -46,36 +46,40 @@ class STFT(torch.nn.Module):
         self.register_buffer('forward_basis', forward_basis.float())
         self.register_buffer('inverse_basis', inverse_basis.float())
 
+        self.cutoff = int((self.filter_length / 2) + 1)
+        self.pad_size = int(self.filter_length / 2)
+
     def transform(self, input_data):
         num_batches = input_data.size(0)
-        num_samples = input_data.size(1)
+        num_samples = input_data.size(2)
 
-        self.num_samples = num_samples
+        #self.num_samples = num_samples
 
         # similar to librosa, reflect-pad the input
         input_data = input_data.view(num_batches, 1, num_samples)
         input_data = F.pad(
             input_data.unsqueeze(1),
-            (int(self.filter_length / 2), int(self.filter_length / 2), 0, 0),
+            (self.pad_size, self.pad_size, 0, 0),
             mode='reflect')
         input_data = input_data.squeeze(1)
 
 
         forward_transform = F.conv1d(
             input_data,
-            Variable(self.forward_basis, requires_grad=False),
+            self.forward_basis,
+#            Variable(self.forward_basis, requires_grad=False),
             stride=self.hop_length,
             padding=0)
 
-        cutoff = int((self.filter_length / 2) + 1)
-        real_part = forward_transform[:, :cutoff, :]
-        imag_part = forward_transform[:, cutoff:, :]
+        
+        real_part = forward_transform[:, :self.cutoff, :]
+        imag_part = forward_transform[:, self.cutoff:, :]
 
         magnitude = torch.sqrt(real_part**2 + imag_part**2)
-        phase = torch.autograd.Variable(
-            torch.atan2(imag_part.data, real_part.data))
+        #phase = torch.autograd.Variable(
+        #phase =    torch.atan2(imag_part.data, real_part.data)
 
-        return magnitude, phase
+        return magnitude#, phase
 
     def inverse(self, magnitude, phase):
         recombine_magnitude_phase = torch.cat(
@@ -149,9 +153,15 @@ class TacotronSTFT(torch.nn.Module):
         """
         assert(torch.min(y.data) >= -1)
         assert(torch.max(y.data) <= 1)
+    
+        mel_output, energy = self.unsafe_mel_spectrogram(y)
 
-        magnitudes, phases = self.stft_fn.transform(y)
-        magnitudes = magnitudes.data
+        return mel_output, energy
+
+
+    def unsafe_mel_spectrogram(self, y):
+        magnitudes = self.stft_fn.transform(y)
+#        magnitudes = magnitudes.data
         mel_output = torch.matmul(self.mel_basis, magnitudes)
         mel_output = self.spectral_normalize(mel_output)
         energy = torch.norm(magnitudes, dim=1)

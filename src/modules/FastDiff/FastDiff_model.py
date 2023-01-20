@@ -1,37 +1,38 @@
 import torch.nn as nn
 import torch
 import logging
-from modules.FastDiff.module.modules import DiffusionDBlock, TimeAware_LVCBlock
-from modules.FastDiff.module.util import calc_diffusion_step_embedding
+from modules.FastDiff.modules import DiffusionDBlock, TimeAware_LVCBlock
+from modules.FastDiff.util import calc_diffusion_step_embedding
 
 def swish(x):
     return x * torch.sigmoid(x)
 
-class FastDiff(nn.Module):
+class FastDiffModel(nn.Module):
     """FastDiff module."""
 
-    def __init__(self,
-                 audio_channels=1,
-                 inner_channels=32,
-                 cond_channels=80,
-                 upsample_ratios=[8, 8, 4],
-                 lvc_layers_each_block=4,
-                 lvc_kernel_size=3,
-                 kpnet_hidden_channels=64,
-                 kpnet_conv_size=3,
-                 dropout=0.0,
-                 diffusion_step_embed_dim_in=128,
-                 diffusion_step_embed_dim_mid=512,
-                 diffusion_step_embed_dim_out=512,
-                 use_weight_norm=True):
+    def __init__(self, config):
         super().__init__()
 
-        self.diffusion_step_embed_dim_in = diffusion_step_embed_dim_in
+        self.diffusion_step_embed_dim_in = config.get("diffusion_step_embed_dim_in", 128)
+        self.diffusion_step_embed_dim_mid = config.get("diffusion_step_embed_dim_mid", 512)
+        self.diffusion_step_embed_dim_out = config.get("diffusion_step_embed_dim_out", 512)
 
-        self.audio_channels = audio_channels
-        self.cond_channels = cond_channels
-        self.lvc_block_nums = len(upsample_ratios)
-        self.first_audio_conv = nn.Conv1d(1, inner_channels,
+        self.audio_channels = config.get("audio_channels", 1)
+        self.inner_channels = config.get("inner_channels", 32)
+        self.cond_channels = config.get("cond_channels", 80)
+        self.upsample_ratios = config.get("upsample_ratios",[8,8,4])
+
+        self.lvc_layers_each_block = config.get("lvc_layers_each_block", 4)
+        self.lvc_kernel_size = config.get("lvc_kernel_size", 3)
+
+        self.kpnet_hidden_channels = config.get("kpnet_hidden_channels", 64)
+        self.kpnet_conv_size = config.get("kpnet_conv_size", 3)
+        self.dropout = config.get("dropout", 0.0)
+
+        self.use_weight_norm = config.get("use_weight_norm", True)
+
+        self.lvc_block_nums = len(self.upsample_ratios)
+        self.first_audio_conv = nn.Conv1d(1, self.inner_channels,
                                     kernel_size=7, padding=(7 - 1) // 2,
                                     dilation=1, bias=True)
 
@@ -41,34 +42,40 @@ class FastDiff(nn.Module):
 
         # the layer-specific fc for noise scale embedding
         self.fc_t = nn.ModuleList()
-        self.fc_t1 = nn.Linear(diffusion_step_embed_dim_in, diffusion_step_embed_dim_mid)
-        self.fc_t2 = nn.Linear(diffusion_step_embed_dim_mid, diffusion_step_embed_dim_out)
+        self.fc_t1 = nn.Linear(self.diffusion_step_embed_dim_in, self.diffusion_step_embed_dim_mid)
+        self.fc_t2 = nn.Linear(self.diffusion_step_embed_dim_mid, self.diffusion_step_embed_dim_out)
 
         cond_hop_length = 1
         for n in range(self.lvc_block_nums):
-            cond_hop_length = cond_hop_length * upsample_ratios[n]
+            cond_hop_length = cond_hop_length * self.upsample_ratios[n]
             lvcb = TimeAware_LVCBlock(
-                in_channels=inner_channels,
-                cond_channels=cond_channels,
-                upsample_ratio=upsample_ratios[n],
-                conv_layers=lvc_layers_each_block,
-                conv_kernel_size=lvc_kernel_size,
+                in_channels=self.inner_channels,
+                cond_channels=self.cond_channels,
+                upsample_ratio=self.upsample_ratios[n],
+                conv_layers=self.lvc_layers_each_block,
+                conv_kernel_size=self.lvc_kernel_size,
                 cond_hop_length=cond_hop_length,
-                kpnet_hidden_channels=kpnet_hidden_channels,
-                kpnet_conv_size=kpnet_conv_size,
-                kpnet_dropout=dropout,
-                noise_scale_embed_dim_out=diffusion_step_embed_dim_out
+                kpnet_hidden_channels=self.kpnet_hidden_channels,
+                kpnet_conv_size=self.kpnet_conv_size,
+                kpnet_dropout=self.dropout,
+                noise_scale_embed_dim_out=self.diffusion_step_embed_dim_out
             )
             self.lvc_blocks += [lvcb]
-            self.downsample.append(DiffusionDBlock(inner_channels, inner_channels, upsample_ratios[self.lvc_block_nums-n-1]))
+            self.downsample.append(DiffusionDBlock(self.inner_channels, 
+                                                    self.inner_channels, 
+                                                    self.upsample_ratios[self.lvc_block_nums-n-1]))
 
 
         # define output layers
-        self.final_conv = nn.Sequential(nn.Conv1d(inner_channels, audio_channels, kernel_size=7, padding=(7 - 1) // 2,
-                                        dilation=1, bias=True))
+        self.final_conv = nn.Sequential(nn.Conv1d(self.inner_channels, 
+                                                    self.audio_channels, 
+                                                    kernel_size=7, \
+                                                    padding=(7 - 1) // 2,
+                                                    dilation=1, 
+                                                    bias=True))
 
         # apply weight norm
-        if use_weight_norm:
+        if self.use_weight_norm:
             self.apply_weight_norm()
 
     def forward(self, data):
@@ -93,6 +100,7 @@ class FastDiff(nn.Module):
             audio = down_layer(audio)
 
         x = audio
+        c = c[:, :, :x.size(2)]
         for n, audio_down in enumerate(reversed(downsample)):
             x = self.lvc_blocks[n]((x, audio_down, c, diffusion_step_embed))
 

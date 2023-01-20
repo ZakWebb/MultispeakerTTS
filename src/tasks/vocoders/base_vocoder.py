@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 from glob import glob
+import os
 
 from tasks.base_conversion import BaseConversion
 from tasks.base_lightning import BaseLit
@@ -27,8 +28,8 @@ class BaseVocoder(BaseLit):
 
         super(BaseVocoder, self).__init__(config)
 
-        if not self.trainable and self.load_ckpt:
-            self.model = get_vocoder_cls(config).load_from_checkpoint(self.ckpt)
+        if self.trainable and self.load_ckpt and self.ckpt is not None and os.path.exists(self.ckpt):
+            self.model = get_vocoder_cls(config).load_from_checkpoint(self.ckpt,config=config["vocoder_config"])
         else:
             self.model = get_vocoder_cls(config)(config["vocoder_config"])
 
@@ -37,9 +38,7 @@ class BaseVocoder(BaseLit):
     def get_ckpt(self, config):
         ckpt = config.get("ckpt")
         if ckpt is None:
-            model_name = get_vocoder_cls(config).__name__
-            print(self.ckpt_dir + model_name)
-            ckpts = sorted(glob(self.ckpt_dir + model_name + "*.pt"), reverse=True) # this might not actually yeild the latest checkpoint
+            ckpts = sorted(glob(os.path.join(self.ckpt_dir, config["vocoder_config"]["model_name"] + "*.ckpt")), reverse=True) # this might not actually yeild the latest checkpoint
             if len(ckpts) > 0:
                 ckpt = ckpts[0]
         

@@ -6,6 +6,8 @@ import os
 from tasks.base_conversion import BaseConversion
 from tasks.base_lightning import BaseLit
 from tasks.base_task import BaseTask
+from data_gen.audio.audio_reader import AudioReader
+
 VOCODERS = {}
 
 
@@ -28,6 +30,7 @@ class BaseVocoder(BaseLit):
 
         super(BaseVocoder, self).__init__(config)
 
+
         if self.trainable and self.load_ckpt and self.ckpt is not None and os.path.exists(self.ckpt):
             self.model = get_vocoder_cls(config).load_from_checkpoint(self.ckpt,config=config["vocoder_config"])
         else:
@@ -49,8 +52,43 @@ class VocoderTask(BaseTask):
         super(VocoderTask, self).__init__()
         self.vocoder = BaseVocoder(config)
         self.train = config["train"]
+        
+        self.sample_rate = config["sample_rate"]
+        self.filter_length = config["filter_length"]
+        self.hop_length = config["hop_length"]
+        self.window_length = config["window_length"]
+        self.n_mel_channels = config["n_mel_channels"]
+
+
     
     def start(self):
         if self.train:
             self.vocoder.train()
+        else:
+            #self.vocoder.train()
+            #convert_torch_to_wavs(os.path.join())
+
+
+            config = {"sample_rate": self.sample_rate,
+                        "filter_length": self.filter_length,
+                        "hop_length": self.hop_length,
+                        "window_length": self.window_length,
+                        "n_mel_channels": self.n_mel_channels
+            }
+
+            audio_reader = AudioReader(config)
+
+            gen_wavs = self.vocoder.predict()
+
+            wav_path = os.path.join(self.vocoder.ckpt_dir, "Step {} wavs".format(self.vocoder.model.global_step))
+            os.makedirs(wav_path, exist_ok = True)
+
+            i = 0
+            for wavs in gen_wavs:
+                for j in range(wavs.size(0)):
+                    audio_reader.set_wav(torch.squeeze(wavs[i,:,:]).cpu().numpy(), self.sample_rate)
+                    audio_reader.save_wav(wav_path, "{}".format(i))
+                    i += 1
+    
+    
         

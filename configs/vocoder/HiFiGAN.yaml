@@ -20,3 +20,5 @@ use_gpu: true
 pin_memory: true
 
 accumulate_gradient: 20
+
+limit_predict_batches: 1

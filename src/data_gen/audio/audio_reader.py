@@ -25,6 +25,10 @@ class AudioReader(object):
     def get_wav(self):
         return self.audio
 
+    def set_wav(self, audio, sr):
+        self.audio = audio
+        self.current_sr = sr
+
     
     def process_wav(self):
         if self.processed:
@@ -36,8 +40,9 @@ class AudioReader(object):
         self.processed = True
     
     def save_wav(self, dir, name):
+        wav = self.audio
         if self.norm:
-            wav = self.audio / np.abs(self.audio).max()
+            wav = wav / np.abs(self.audio).max()
         wav *= 32767
         # proposed by @dsmiller
         sf.write(os.path.join(dir, name + ".wav"), wav.astype(np.int16), self.current_sr)

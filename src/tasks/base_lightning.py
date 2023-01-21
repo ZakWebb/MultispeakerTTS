@@ -14,6 +14,7 @@ class BaseLit(BaseConversion):
         super(BaseLit, self).__init__(config)
 
         self.trainable = config["trainable"]
+        self.training = config["train"]
 
         self.ckpt_dir = os.path.join(config["work_dir"], config["task"], config[config["task"] + "_config"]["model_name"])
         self.ckpt = self.get_ckpt(config)
@@ -36,10 +37,12 @@ class BaseLit(BaseConversion):
 
         collate_fn = get_TTSDataset_collater(self.input, self.output)
 
+        self.limit_predict_batches = config.get("limit_predict_batches", 1.0)
+
         if self.trainable:
-            self.train_loader = DataLoader(TTSDataset(config, self.input, self.output, "train"), self.batch_size, self.shuffle, num_workers=self.num_workers, collate_fn=collate_fn, pin_memory=self.pin_memory)
-            self.valid_loader = DataLoader(TTSDataset(config, self.input, self.output, "valid"), self.batch_size, False, num_workers=self.num_workers, collate_fn=collate_fn, pin_memory=self.pin_memory)
-            self.test_loader = DataLoader(TTSDataset(config, self.input, self.output, "test"), self.batch_size, False, num_workers=self.num_workers, collate_fn=collate_fn, pin_memory=self.pin_memory)
+            self.train_loader = DataLoader(TTSDataset(config, self.input, self.output, "train"), self.batch_size, self.shuffle, num_workers=self.num_workers, collate_fn=collate_fn, pin_memory=self.pin_memory, persistent_workers=True)
+            self.valid_loader = DataLoader(TTSDataset(config, self.input, self.output, "valid"), self.batch_size, False, num_workers=self.num_workers, collate_fn=collate_fn, pin_memory=self.pin_memory, persistent_workers=True)
+            self.test_loader = DataLoader(TTSDataset(config, self.input, self.output, "test"), self.batch_size, False, num_workers=self.num_workers, collate_fn=collate_fn, pin_memory=self.pin_memory, persistent_workers=True)
         else:
             self.train_loader = None
             self.valid_loader = None
@@ -70,16 +73,23 @@ class BaseLit(BaseConversion):
                                     devices=self.devices,
                                     default_root_dir=self.ckpt_dir,
                                     accumulate_grad_batches=self.accumulate_gradient,
-                                    log_every_n_steps=25
+                                    log_every_n_steps=25,
+                                    limit_predict_batches=self.limit_predict_batches
     #                                profiler=AdvancedProfiler(dirpath=self.ckpt_dir, filename="perf_logs")
                                 )
 
     def train(self):
-        if self.trainable:
+        if self.training:
+            print("starting training")
             self.trainer.fit(self.model, self.train_loader, self.valid_loader, ckpt_path=self.ckpt)
-#            self.trainer.test(self.model, self.test_loader)
+#            
         else:
-            ValueError("Trying to train model {self.model.name} when not trainable.")
+            print("starting testing")
+            self.trainer.test(self.model, self.test_loader, ckpt_path=self.ckpt)
+           
+    
+    def predict(self):
+        return self.trainer.predict(self.model, self.test_loader, ckpt_path=self.ckpt)
     
     def get_ckpt(self, config):
         return config.get("ckpt")

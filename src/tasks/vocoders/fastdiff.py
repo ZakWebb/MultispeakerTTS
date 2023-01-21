@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from pytorch_lightning import LightningModule
+import os
 
 from tasks.vocoders.base_vocoder import register_vocoder
 
@@ -39,12 +40,13 @@ class FastDiff(LightningModule):
         
 
 
-    def forward(self, mels):
+    def forward(self, batch):
+        mels, _ = batch
         #audio_length = (mels.shape[-1] - 1) * self.hop_length + self.win_length
-        audio_length = mels.sphap[-1] * self.hop_length
-        ones = torch.ones(audio_length, device=self.device)
+        audio_length = mels.size(-1) * self.hop_length
+        ones = torch.ones(mels.size(0), 1, device=self.device)
 
-        x = torch.normal(0, 1, size=audio_length, device=self.device)
+        x = torch.normal(0., 1., size=(mels.size(0), 1, audio_length,), device=self.device)
 
         for n in range(self.T - 1, -1, -1):
                 diffusion_steps = self.steps_infer[n] * ones
@@ -63,7 +65,7 @@ class FastDiff(LightningModule):
                 x -= self.beta[n] / torch.sqrt(1 - self.alpha[n] ** 2.) * epsilon_theta
                 x /= torch.sqrt(1 - self.beta[n])
                 if n > 0:
-                    x = x + self.sigma[n] * torch.normal(0, 1, size=audio_length, device=self.device)
+                    x = x + self.sigma[n] * torch.normal(0.0, 1.0, size=(audio_length,), device=self.device)
         
         return x
     
@@ -81,10 +83,37 @@ class FastDiff(LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx):
+        mels, _ = batch
         loss = 1000 * self.theta_timestep_loss(batch)
+
+        if batch_idx < 3:
+            print("{}".format(batch_idx))
+            wavs = self.forward(mels)
+        else:
+            wavs = None
+
         
+        returnable = {"loss": loss, "gen_wavs" : wavs}
+
         self.log("test_loss", loss)
-        return loss
+        return returnable
+
+    def test_epoch_end(self, outputs) -> None:
+        previous = super().test_epoch_end(outputs)
+        i = 0
+        test_path = os.path.join(self.ckpt_dir, "Step {} wavs".format(self.global_step))
+        os.makedirs(test_path, exist_ok=True)
+        
+        os.mkdir
+
+        for output in output:
+            if output["gen_wavs"] is not None:
+                wavs = output["gen_wavs"]
+                for j in range(wavs.size(0)):
+                    torch.save(wavs[j,:,:], os.path.join(test_path, "{}.pt".format(i)))
+                    i += 1
+
+        return previous
 
 
     def configure_optimizers(self):
@@ -168,6 +197,8 @@ class FastDiff(LightningModule):
     def training_epoch_end(self, training_step_outputs):
         self.log("global_step", torch.tensor([self.global_step]).float().item())  # there's probably a better way to convert ints to float32s, but I odn't know it
         return super().training_epoch_end(training_step_outputs)
+
+    
 
     # def sampling_given_noise_schedule(
     #         net,

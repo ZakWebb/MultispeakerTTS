@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from .Modules import ScaledDotProductAttention
+from modules.Common.Modules import ScaledDotProductAttention, AffineLinear
 
 
 class MultiHeadAttention(nn.Module):
@@ -91,3 +91,22 @@ class PositionwiseFeedForward(nn.Module):
         output = self.layer_norm(output + residual)
 
         return output
+
+class StyleAdaptiveLayerNorm(nn.Module):
+    def __init__(self, in_channel, style_dim):
+        super(StyleAdaptiveLayerNorm, self).__init__()
+        self.in_channel = in_channel
+        self.norm = nn.LayerNorm(in_channel, elementwise_affine=False)
+
+        self.style = AffineLinear(style_dim, in_channel * 2)
+        self.style.affine.bias.data[:in_channel] = 1
+        self.style.affine.bias.data[in_channel:] = 0
+
+    def forward(self, input, style_code):
+        # style
+        style = self.style(style_code).unsqueeze(1)
+        gamma, beta = style.chunk(2, dim=-1)
+        
+        out = self.norm(input)
+        out = gamma * out + beta
+        return out

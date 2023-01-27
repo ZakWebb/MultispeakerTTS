@@ -1,5 +1,5 @@
 from tasks.base_conversion import BaseConversion
-from tasks.text_to_phoneme.symbols import symbols
+from data_gen.symbols.symbols import symbols
 import importlib
 
 _T2PS = {}

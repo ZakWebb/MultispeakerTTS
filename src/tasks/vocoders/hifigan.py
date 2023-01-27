@@ -30,8 +30,9 @@ class HiFiGAN(LightningModule):
 
         self.stft = TacotronSTFT(self.filter_length, self.hop_length, self.win_length, self.n_mel_channels, self.sampling_rate, self.mel_fmin, self.mel_fmax)
     
-    def forward(self, x):
-        return self.generator(x)
+    def forward(self, batch):
+        mels, _ = batch
+        return self.generator(mels)
     
     def training_step(self, batch, batch_idx, optimizer_idx) :
         true_mels, true_wav =  batch
@@ -106,5 +107,5 @@ class HiFiGAN(LightningModule):
         return [opt_g, opt_d], []
     
     def training_epoch_end(self, training_step_outputs):
-        self.log("global_step", torch.tensor([self.global_step]).float().item())  # there's probably a better way to convert ints to float32s, but I odn't know it
+        self.log("global_step", self.global_step * 1.0)
         return super().training_epoch_end(training_step_outputs)

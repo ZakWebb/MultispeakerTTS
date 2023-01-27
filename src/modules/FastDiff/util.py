@@ -60,12 +60,12 @@ def print_size(net):
 
 # Utilities for diffusion models
 
-def std_normal(size):
+def std_normal(size, device):
     """
     Generate the standard Gaussian variable of a certain size
     """
 
-    return torch.normal(0, 1, size=size).cuda()
+    return torch.normal(0, 1, size=size, device=device)
 
 
 def calc_noise_scale_embedding(noise_scales, noise_scale_embed_dim_in):
@@ -88,7 +88,7 @@ def calc_noise_scale_embedding(noise_scales, noise_scale_embed_dim_in):
 
     half_dim = noise_scale_embed_dim_in // 2
     _embed = np.log(10000) / (half_dim - 1)
-    _embed = torch.exp(torch.arange(half_dim) * -_embed).cuda()
+    _embed = torch.exp(torch.arange(half_dim, device= noise_scales.get_device()) * -_embed)
     _embed = noise_scales * _embed
     noise_scale_embed = torch.cat((torch.sin(_embed), 
                                       torch.cos(_embed)), 1)
@@ -200,18 +200,18 @@ def sampling_given_noise_schedule(
         step = map_noise_scale_to_time_step(alpha_infer[n], alpha)
         if step >= 0:
             steps_infer.append(step)
-    steps_infer = torch.FloatTensor(steps_infer)
+    steps_infer = torch.FloatTensor(steps_infer, device=inference_noise_schedule.get_device())
 
     # N may change since alpha_infer can be out of the range of alpha
     N = len(steps_infer)
 
-    x = std_normal(size)
+    x = std_normal(size, inference_noise_schedule.get_device())
     if return_sequence:
         x_ = copy.deepcopy(x)
         xs = [x_]
     with torch.no_grad():
         for n in tqdm(range(N - 1, -1, -1), desc='FastDiff sample time step', total=N):
-            diffusion_steps = (steps_infer[n] * torch.ones((size[0], 1))).cuda()
+            diffusion_steps = (steps_infer[n] * torch.ones((size[0], 1), device=inference_noise_schedule.get_device()), )
             epsilon_theta = net((x, condition, diffusion_steps,))
             if ddim:
                 alpha_next = alpha_infer[n] / (1 - beta_infer[n]).sqrt()
@@ -223,7 +223,7 @@ def sampling_given_noise_schedule(
                 x -= beta_infer[n] / torch.sqrt(1 - alpha_infer[n] ** 2.) * epsilon_theta
                 x /= torch.sqrt(1 - beta_infer[n])
                 if n > 0:
-                    x = x + sigma_infer[n] * std_normal(size)
+                    x = x + sigma_infer[n] * std_normal(size, inference_noise_schedule.get_device())
             if return_sequence:
                 x_ = copy.deepcopy(x)
                 xs.append(x_)
@@ -253,17 +253,19 @@ def noise_scheduling(net, size, diffusion_hyperparams, condition=None, ddim=Fals
 
     print('begin noise scheduling, maximum number of reverse steps = %d' % (N))
 
+    device = alpha.get_device()
+
     betas = []
-    x = std_normal(size)
+    x = std_normal(size, device)
     with torch.no_grad():
-        beta_cur = torch.ones(1, 1, 1).cuda() * betaN
-        alpha_cur = torch.ones(1, 1, 1).cuda() * alphaN
+        beta_cur = torch.ones(1, 1, 1, device= device) * betaN
+        alpha_cur = torch.ones(1, 1, 1, device = device) * alphaN
         for n in range(N - 1, -1, -1):
             # print(n, beta_cur.squeeze().item(), alpha_cur.squeeze().item())
-            step = map_noise_scale_to_time_step(alpha_cur.squeeze().item(), alpha)
+            step = map_noise_scale_to_time_step(alpha_cur.squeeze().item(), alpha) # can we get rid of this
             if step >= 0:
                 betas.append(beta_cur.squeeze().item())
-            diffusion_steps = (step * torch.ones((size[0], 1))).cuda()
+            diffusion_steps = (step * torch.ones((size[0], 1), device=device))
             epsilon_theta = net((x, condition, diffusion_steps,))
             if ddim:
                 alpha_nxt = alpha_cur / (1 - beta_cur).sqrt()
@@ -282,7 +284,7 @@ def noise_scheduling(net, size, diffusion_hyperparams, condition=None, ddim=Fals
                 x.squeeze(1), (beta_nxt.view(-1, 1), (1 - alpha_cur ** 2.).view(-1, 1)))
             if beta_cur.squeeze().item() < rho:
                 break
-    return torch.FloatTensor(betas[::-1]).cuda()
+    return torch.FloatTensor(betas[::-1], device=device)
 
 
 def theta_timestep_loss(net, X, diffusion_hyperparams, reverse=False):
@@ -308,8 +310,11 @@ def theta_timestep_loss(net, X, diffusion_hyperparams, reverse=False):
 
     mel_spectrogram, audio = X
     B, C, L = audio.shape  # B is batchsize, C=1, L is audio length
-    ts = torch.randint(T, size=(B, 1, 1)).cuda()  # randomly sample steps from 1~T
-    z = std_normal(audio.shape)
+    device = audio.get_device()
+    
+
+    ts = torch.randint(T, size=(B, 1, 1), device = device)  # randomly sample steps from 1~T
+    z = std_normal(audio.shape, device)
     delta = (1 - alpha[ts] ** 2.).sqrt()
     alpha_cur = alpha[ts]
     noisy_audio = alpha_cur * audio + delta * z  # compute x_t from q(x_t|x_0)
@@ -342,7 +347,7 @@ def phi_loss(net, X, diffusion_hyperparams):
 
     mel_spectrogram, audio = X
     B, C, L = audio.shape  # B is batchsize, C=1, L is audio length
-    ts = torch.randint(tau, T - tau, size=(B,)).cuda()  # randomly sample steps from 1~T
+    ts = torch.randint(tau, T - tau, size=(B,), device=mel_spectrogram.get_device())  # randomly sample steps from 1~T
     alpha_cur = alpha.index_select(0, ts).view(B, 1, 1)
     alpha_nxt = alpha.index_select(0, ts + tau).view(B, 1, 1)
     beta_nxt = 1 - (alpha_nxt / alpha_cur) ** 2.
@@ -421,7 +426,7 @@ def calc_diffusion_step_embedding(diffusion_steps, diffusion_step_embed_dim_in):
 
     half_dim = diffusion_step_embed_dim_in // 2
     _embed = np.log(10000) / (half_dim - 1)
-    _embed = torch.exp(torch.arange(half_dim) * -_embed).cuda()
+    _embed = torch.exp(torch.arange(half_dim, device=diffusion_steps.get_device()) * -_embed)
     _embed = diffusion_steps * _embed
     diffusion_step_embed = torch.cat((torch.sin(_embed),
                                       torch.cos(_embed)), 1)

@@ -3,16 +3,32 @@ import torch.nn as nn
 import numpy as np
 
 
-from ..Common.Modules import Mish, ConvNorm, LinearNorm, get_sinusoid_encoding_table
+from modules.Common.Modules import Mish, ConvNorm, LinearNorm, get_sinusoid_encoding_table
+from modules.Common.SubLayers import MultiHeadAttention, PositionwiseFeedForward, StyleAdaptiveLayerNorm
 
+from data_gen.symbols import symbols, PAD
 
 class Encoder(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, n_src_vocab = len(symbols)):
         super(Encoder, self).__init__()
 
         ## Define Config and constants
 
-        self.src_word_embedding = nn.Embedding(n_src_vocab, d_word_vec, padding_idx = Constants.PAD)
+        
+        self.max_seq_len = config["max_seq_len"]
+        self.n_layers = config["encoder_layer"]
+        self.d_model = config["encoder_hidden"]
+        self.n_head = config["encoder_head"]
+        self.d_k = config["encoder_hidden"] // self.n_head
+        self.d_v = config["encoder_hidden"] // self.n_head
+        self.d_inner = config["fft_conv1d_filter_size"]
+        self.fft_conv1d_kernel_size = config["fft_conv1d_kernel_size"]
+        self.d_out = config["decoder_hidden"]
+        self.style_dim = config["style_vector_dim"]
+        self.dropout = config["dropout"]
+
+
+        self.src_word_embedding = nn.Embedding(n_src_vocab, self.d_model, padding_idx = PAD)
 
         self.prenet = PreNet(self.d_model, self.d_model, self.dropout)
 
@@ -140,3 +156,31 @@ class PostNet(nn.Module):
     def forward():
         raise NotImplemented
 
+
+class FFTBlock(nn.Module):
+    ''' FFT Block '''
+    def __init__(self, d_model,d_inner,
+                    n_head, d_k, d_v, fft_conv1d_kernel_size, style_dim, dropout):
+        super(FFTBlock, self).__init__()
+        self.slf_attn = MultiHeadAttention(
+            n_head, d_model, d_k, d_v, dropout=dropout)
+        self.saln_0 = StyleAdaptiveLayerNorm(d_model, style_dim)
+
+        self.pos_ffn = PositionwiseFeedForward(
+            d_model, d_inner, fft_conv1d_kernel_size, dropout=dropout)
+        self.saln_1 = StyleAdaptiveLayerNorm(d_model, style_dim)
+
+    def forward(self, input, style_vector, mask=None, slf_attn_mask=None):
+        # multi-head self attn
+        slf_attn_output, slf_attn = self.slf_attn(input, mask=slf_attn_mask)
+        slf_attn_output = self.saln_0(slf_attn_output, style_vector)
+        if mask is not None:
+            slf_attn_output = slf_attn_output.masked_fill(mask.unsqueeze(-1), 0)
+
+        # position wise FF
+        output = self.pos_ffn(slf_attn_output)
+        output = self.saln_1(output, style_vector)
+        if mask is not None:
+            output = output.masked_fill(mask.unsqueeze(-1), 0)
+
+        return output, slf_attn

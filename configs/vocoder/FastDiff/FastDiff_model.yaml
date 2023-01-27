@@ -11,7 +11,7 @@ lvc_layers_each_block: 4
 lvc_kernel_size: 3
 kpnet_hidden_channels: 64
 kpnet_conv_size: 3
-dropout: 0.0
+dropout: 0.1
 diffusion_step_embed_dim_in: 128
 diffusion_step_embed_dim_mid: 512
 diffusion_step_embed_dim_out: 512

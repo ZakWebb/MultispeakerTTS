@@ -1,5 +1,3 @@
-#from tasks.vocoders import hifigan
-#from tasks.vocoders import fastdiff
 from tasks.vocoders.base_vocoder import VocoderTask, register_vocoder
 from tasks.vocoders.hifigan import HiFiGAN
 from tasks.vocoders.fastdiff import FastDiff

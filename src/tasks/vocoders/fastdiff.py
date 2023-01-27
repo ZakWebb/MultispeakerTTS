@@ -35,22 +35,20 @@ class FastDiff(LightningModule):
         noise_schedule = torch.linspace(self.beta_0, self.beta_T, self.T, device=self.device)
         self.compute_hyperparams_given_schedule(noise_schedule)
 
-        
-
-        
-
-
     def forward(self, batch):
-        mels, _ = batch
+        mels, mel_mask, _, _ = batch  # need to add mel_mask to this somehow
         #audio_length = (mels.shape[-1] - 1) * self.hop_length + self.win_length
         audio_length = mels.size(-1) * self.hop_length
         ones = torch.ones(mels.size(0), 1, device=self.device)
+        audio_mask = torch.repeat_interleave(mel_mask, self.hop_length, dim=2)
+        audio_mask = audio_mask[:,0,:].view(mels.size(0), 1, -1)
 
-        x = torch.normal(0., 1., size=(mels.size(0), 1, audio_length,), device=self.device)
+        x = torch.mul(torch.normal(0., 1., size=(mels.size(0), 1, audio_length,), device=self.device), audio_mask)
+        
 
         for n in range(self.T - 1, -1, -1):
                 diffusion_steps = self.steps_infer[n] * ones
-                epsilon_theta = self.model((x, mels, diffusion_steps))
+                epsilon_theta = torch.mul(self.model((x, mels, diffusion_steps)), audio_mask)
                 # if ddim:
                 #     alpha_next = self.alpha[n] / (1 - self.beta[n]).sqrt()
                 #     c1 = alpha_next / self.alpha[n]
@@ -65,38 +63,38 @@ class FastDiff(LightningModule):
                 x -= self.beta[n] / torch.sqrt(1 - self.alpha[n] ** 2.) * epsilon_theta
                 x /= torch.sqrt(1 - self.beta[n])
                 if n > 0:
-                    x = x + self.sigma[n] * torch.normal(0.0, 1.0, size=(audio_length,), device=self.device)
+                    x = x + self.sigma[n] * torch.mul(torch.normal(0.0, 1.0, size=(audio_length,), device=self.device), audio_mask)
         
         return x
     
     def training_step(self, batch, batch_idx):
-        loss = 1000 * self.theta_timestep_loss(batch)
+        loss = self.theta_timestep_loss(batch)
         
         self.log("train_loss", loss)
         return loss
 
     
     def validation_step(self, batch, batch_idx):
-        loss = 1000 * self.theta_timestep_loss(batch)
+        loss = self.theta_timestep_loss(batch)
         
         self.log("val_loss", loss)
         return loss
 
     def test_step(self, batch, batch_idx):
-        mels, _ = batch
-        loss = 1000 * self.theta_timestep_loss(batch)
+        # mels, _ = batch
+        loss = self.theta_timestep_loss(batch)
 
-        if batch_idx < 3:
-            print("{}".format(batch_idx))
-            wavs = self.forward(mels)
-        else:
-            wavs = None
+        # if batch_idx < 3:
+        #     print("{}".format(batch_idx))
+        #     wavs = self.forward(mels)
+        # else:
+        #     wavs = None
 
         
-        returnable = {"loss": loss, "gen_wavs" : wavs}
+        # returnable = {"loss": loss, "gen_wavs" : wavs}
 
         self.log("test_loss", loss)
-        return returnable
+        return loss
 
     def test_epoch_end(self, outputs) -> None:
         previous = super().test_epoch_end(outputs)
@@ -133,14 +131,18 @@ class FastDiff(LightningModule):
         theta loss
         """
 
-        mel_spectrogram, audio = batch
+        mel_spectrogram, _, audio, audio_mask = batch
         B, C, L = audio.shape  # B is batchsize, C=1, L is audio length
         ts = torch.randint(self.T, size=(B, 1, 1), device=self.device)  # randomly sample steps from 1~T
         z = torch.normal(0, 1, size=audio.shape, device=self.device)
+        z = torch.mul(z, audio_mask)
         delta = (1 - self.alpha[ts] ** 2.).sqrt()
         alpha_cur = self.alpha[ts]
         noisy_audio = alpha_cur * audio + delta * z  # compute x_t from q(x_t|x_0)
         epsilon_theta = self.model((noisy_audio, mel_spectrogram, ts.view(B, 1)))
+
+        epsilon_theta = torch.mul(epsilon_theta, audio_mask[:,:,:epsilon_theta.size(2)])
+
 
         z = z[:,:,:epsilon_theta.size(2)]
 
@@ -195,7 +197,7 @@ class FastDiff(LightningModule):
         self.steps_infer = torch.FloatTensor(steps_infer, device=self.device)
 
     def training_epoch_end(self, training_step_outputs):
-        self.log("global_step", torch.tensor([self.global_step]).float().item())  # there's probably a better way to convert ints to float32s, but I odn't know it
+        self.log("global_step", self.global_step * 1.0) 
         return super().training_epoch_end(training_step_outputs)
 
     

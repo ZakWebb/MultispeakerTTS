@@ -21,10 +21,10 @@ def TTSDataset_collater(input, output, data):
     pre_inputs = [sample["input"] for sample in data]
     pre_outputs = [sample["output"] for sample in data]
 
-    post_inputs = collater(input, pre_inputs)
-    post_outputs = collater(output, pre_outputs)
+    post_inputs, input_mask= collater(input, pre_inputs)
+    post_outputs, output_mask  = collater(output, pre_outputs)
 
-    return post_inputs, post_outputs
+    return post_inputs, input_mask, post_outputs, output_mask
 
 def collater(datatype, data):
     cur_data=[]
@@ -35,11 +35,13 @@ def collater(datatype, data):
         cur_data = data
             
     collated = pad_sequence(cur_data, batch_first=True)
+    mask = (torch.clone(collated)).apply_(lambda x : 1.0 if x != 0.0 else 0.0)
 
     if datatype in  {"mels", "wavs"}:
         collated = torch.transpose(collated, 1, 2)
+        mask = torch.transpose(mask, 1, 2)
 
-    return collated
+    return collated, mask
 
 
 class TTSDataset(Dataset):

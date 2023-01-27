@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 import numpy as np
 
 def get_sinusoid_encoding_table(n_position, d_hid, padding_idx=None):

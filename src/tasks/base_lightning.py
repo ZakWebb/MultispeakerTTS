@@ -4,6 +4,10 @@ from pytorch_lightning.callbacks import ModelCheckpoint, DeviceStatsMonitor, TQD
 from pytorch_lightning.profilers import AdvancedProfiler, PyTorchProfiler, SimpleProfiler
 import torch
 from torch.utils.data import DataLoader
+import re
+from glob import glob
+
+from utils.lightning_callbacks import ProfCallback
 
 
 from tasks.datasets import TTSDataset, get_TTSDataset_collater
@@ -15,6 +19,8 @@ class BaseLit(BaseConversion):
 
         self.trainable = config["trainable"]
         self.training = config["train"]
+
+        self.task = config["task"]
 
         self.ckpt_dir = os.path.join(config["work_dir"], config["task"], config[config["task"] + "_config"]["model_name"])
         self.ckpt = self.get_ckpt(config)
@@ -50,32 +56,33 @@ class BaseLit(BaseConversion):
 
         self.model = None
 
-        self.ckpt_callbacks = [#DeviceStatsMonitor(),
+        self.callbacks = [#DeviceStatsMonitor(),
+                                ProfCallback(),
                                 TQDMProgressBar(refresh_rate=10)]
 
         if config.get("save_top_k") is not None:
-            self.ckpt_callbacks.append(ModelCheckpoint(save_top_k=config["save_top_k"],
+            self.callbacks.append(ModelCheckpoint(save_top_k=config["save_top_k"],
                                         monitor="val_loss",
                                         mode="min",
                                         dirpath=self.ckpt_dir,
-                                        filename=config[config["task"] + "_config"]["model_name"] + "-{epoch:02d}-{val_loss:.2f}"))
+                                        filename=config[config["task"] + "_config"]["model_name"] + "-{epoch:02d}-{val_loss:.6f}"))
         
-        self.ckpt_callbacks.append(ModelCheckpoint(save_top_k=config.get("save_last_k",5),
+        self.callbacks.append(ModelCheckpoint(save_top_k=config.get("save_last_k",5),
                                     monitor="global_step",
                                     mode="max",
                                     dirpath=self.ckpt_dir,
-                                    filename=config[config["task"] + "_config"]["model_name"] + "-{epoch:02d}-{val_loss:.2f}"))
+                                    filename=config[config["task"] + "_config"]["model_name"] + "-{epoch:02d}-{val_loss:.6f}"))
                                         
 
 
-        self.trainer = pl.Trainer(callbacks=self.ckpt_callbacks, 
+        self.trainer = pl.Trainer(callbacks=self.callbacks, 
                                     accelerator=self.accelerator, 
                                     devices=self.devices,
                                     default_root_dir=self.ckpt_dir,
                                     accumulate_grad_batches=self.accumulate_gradient,
                                     log_every_n_steps=25,
-                                    limit_predict_batches=self.limit_predict_batches
-    #                                profiler=AdvancedProfiler(dirpath=self.ckpt_dir, filename="perf_logs")
+                                    limit_predict_batches=self.limit_predict_batches,
+                                    profiler=AdvancedProfiler(dirpath=self.ckpt_dir, filename="perf_logs")
                                 )
 
     def train(self):
@@ -92,7 +99,28 @@ class BaseLit(BaseConversion):
         return self.trainer.predict(self.model, self.test_loader, ckpt_path=self.ckpt)
     
     def get_ckpt(self, config):
-        return config.get("ckpt")
+        ckpt = config.get("ckpt")
+        if ckpt is None:
+            ckpts = glob(os.path.join(self.ckpt_dir, config[self.task + "_config"]["model_name"] + "*.ckpt"))
+            
+            model_name_ints = len(re.findall("\d+", config[self.task + "_config"]["model_name"]))
+
+            def find_epoch(name):
+                temp = os.path.basename(name)
+                nums = re.findall("\d+", temp)
+                if len(nums) > 0:
+                    return int(nums[model_name_ints])
+                else:
+                    return -1
+
+            epochs = list(map(find_epoch, ckpts))
+
+            ckpts = sorted(zip(ckpts, epochs), key=lambda x: x[1], reverse=True)
+            
+            if len(ckpts) > 0:
+                ckpt = ckpts[0][0]
+        
+        return ckpt
 
     def convert(self, input):
         self.model.eval()

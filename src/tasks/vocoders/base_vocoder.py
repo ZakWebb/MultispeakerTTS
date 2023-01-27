@@ -1,6 +1,5 @@
 import torch
 from torch.utils.data import DataLoader
-from glob import glob
 import os
 
 from tasks.base_conversion import BaseConversion
@@ -36,16 +35,6 @@ class BaseVocoder(BaseLit):
         else:
             self.model = get_vocoder_cls(config)(config["vocoder_config"])
 
-    
-    
-    def get_ckpt(self, config):
-        ckpt = config.get("ckpt")
-        if ckpt is None:
-            ckpts = sorted(glob(os.path.join(self.ckpt_dir, config["vocoder_config"]["model_name"] + "*.ckpt")), reverse=True) # this might not actually yeild the latest checkpoint
-            if len(ckpts) > 0:
-                ckpt = ckpts[0]
-        
-        return ckpt
 
 class VocoderTask(BaseTask):
     def __init__(self, config):

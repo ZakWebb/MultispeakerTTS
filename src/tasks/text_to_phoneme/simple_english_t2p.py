@@ -1,5 +1,5 @@
 from tasks.text_to_phoneme.base_text_to_phoneme import BaseText2Phoneme, register_t2p
-from tasks.text_to_phoneme.symbols import symbols
+from data_gen.symbols.symbols  import symbols
 import re
 
 @register_t2p
@@ -70,4 +70,4 @@ def _arpabet_to_sequence(text):
 
 
 def _should_keep_symbol(s):
-    return s in _symbol_to_id and s is not '_' and s is not '~'
+    return s in _symbol_to_id and s != '_' and s != '~'

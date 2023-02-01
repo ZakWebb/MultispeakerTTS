@@ -51,7 +51,7 @@ class Encoder(nn.Module):
 
         # -- Forward
         # word embedding
-        src_embedded = self.src_word_emb(src_seq)
+        src_embedded = self.src_word_embedding(src_seq)
         # prenet
         src_seq = self.prenet(src_embedded, mask)
         # position encoding
@@ -77,6 +77,18 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
 
         # Include config stuff
+
+        self.max_seq_len = config["max_seq_len"]
+        self.n_layers = config["decoder_layer"]
+        self.d_model = config["decoder_hidden"]
+        self.n_head = config["decoder_head"]
+        self.d_k = config["decoder_hidden"] // self.n_head
+        self.d_v = config["decoder_hidden"] // self.n_head
+        self.d_inner = config["fft_conv1d_filter_size"]
+        self.fft_conv1d_kernel_size = config["fft_conv1d_kernel_size"]
+        self.d_out = config["n_mel_channels"]
+        self.style_dim = config["style_vector_dim"]
+        self.dropout = config["dropout"]
 
         self.prenet = nn.Sequential(
             nn.Linear(self.d_model, self.d_model//2),
@@ -149,12 +161,12 @@ class PreNet(nn.Module):
             output = output.masked_fill(mask.unsqueeze(-1), 0)
         return output
 
-class PostNet(nn.Module):
-    def __init__(self, config):
-        super(PostNet, self).__init__()
+# class PostNet(nn.Module):
+#     def __init__(self, config):
+#         super(PostNet, self).__init__()
 
-    def forward():
-        raise NotImplemented
+#     def forward():
+#         raise NotImplemented
 
 
 class FFTBlock(nn.Module):

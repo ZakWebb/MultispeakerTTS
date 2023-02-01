@@ -12,44 +12,32 @@ class FastSpeech2_model(nn.Module):
         self.variance_adaptor = VarianceAdaptor(config)
         self.decoder = Decoder(config)
 
-    def forward(self, batch, d_target=None, p_target=None, e_target=None):#src_seq, src_len, max_src_len=None, d_target=None, p_target=None, e_target=None):
-        phonemes, phoneme_mask, _, _ = batch
+    def forward(self, phonemes, phoneme_mask, d_target=None, p_target=None, e_target=None):#src_seq, src_len, max_src_len=None, d_target=None, p_target=None, e_target=None):
         # Initialize Masks
         #src_mask = get_mask_from_lenths(src_len, max_src_len)
-
-        phoneme_bool_mask = phoneme_mask == 0
-
-
-
         # Encoding
-        encoder_output, src_embedded = self.encoder(phonemes, phoneme_bool_mask)
+        encoder_output, src_embedded = self.encoder(phonemes, phoneme_mask)
 
         # Variance Adaptor
-        acoustic_adaptor_output, d_prediction, p_prediction, e_preciction, mel_len, mel_mask = self.variance_adaptor(
-            encoder_output, phoneme_bool_mask, d_target, p_target, e_target)
+        acoustic_adaptor_output, d_prediction, mel_len, mel_mask = self.variance_adaptor(
+            encoder_output, phoneme_mask, d_target, p_target, e_target)
         
         mel_prediction = self.decoder(acoustic_adaptor_output, mel_mask)
 
-        return mel_prediction, src_embedded, d_prediction, p_prediction, e_preciction, phoneme_bool_mask, mel_mask, mel_len
+        return mel_prediction, src_embedded, d_prediction, mel_mask, mel_len
 
-    def inference(self, batch, src_len=None, max_src_len=None, return_attn=False):
+    def inference(self, phonemes, phoneme_mask, src_len=None, max_src_len=None, return_attn=False):
 
-        phonemes, phoneme_mask, _, _ = batch
-        style_vector = None
-        
-        phoneme_bool_mask = phoneme_mask == 0
-        
         # Encoding
-        encoder_output, src_embedded, enc_slf_attn = self.encoder(phonemes, style_vector, phoneme_bool_mask)
+        encoder_output, src_embedded, enc_slf_attn = self.encoder(phonemes, phoneme_mask)
 
         # Variance Adaptor
-        acoustic_adaptor_output, d_prediction, p_prediction, e_prediction, \
-                mel_len, mel_mask = self.variance_adaptor(encoder_output, phoneme_bool_mask)
+        acoustic_adaptor_output, d_prediction, mel_len, mel_mask = self.variance_adaptor(encoder_output, phoneme_mask)
 
         # Deocoding
-        mel_output, dec_slf_attn = self.decoder(acoustic_adaptor_output, style_vector, mel_mask)
+        mel_output, dec_slf_attn = self.decoder(acoustic_adaptor_output, mel_mask)
 
         if return_attn:
             return enc_slf_attn, dec_slf_attn
 
-        return mel_output, src_embedded, d_prediction, p_prediction, e_prediction, phoneme_bool_mask, mel_mask, mel_len
+        return mel_output, src_embedded, d_prediction, mel_mask, mel_len

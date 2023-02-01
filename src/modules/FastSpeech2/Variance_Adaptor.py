@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 import numpy as np
+from torch.nn.utils.rnn import pad_sequence
 
-from ..Common.Modules import Mish, ConvNorm, LinearNorm, get_sinusoid_encoding_table.
+from modules.Common.Modules import Mish, ConvNorm, LinearNorm, get_sinusoid_encoding_table
+
 
 
 class VarianceAdaptor(nn.Module):
@@ -10,57 +12,64 @@ class VarianceAdaptor(nn.Module):
         super(VarianceAdaptor, self).__init__()       
         
         # Get Config Stuff
+
+        self.hidden_dim = config["variance_predictor_filter_size"]
+        self.predictor_kernel_size = config["variance_predictor_kernel_size"]
+        self.embedding_kernel_size = config["variance_embedding_kernel_size"]
+        self.dropout = config["variance_dropout"]
+
+        self.max_sequence_len = config["max_sequence_len"]
         
         # Duration
         self.duration_predictor = VariancePredictor(self.hidden_dim, self.hidden_dim,
                                                             self.predictor_kernel_size, dropout=self.dropout)
-        # Pitch
-        self.pitch_predictor = VariancePredictor(self.hidden_dim, self.hidden_dim, self.predictor_kernel_size, 
-                                                            dropout=self.dropout)
-        self.pitch_embedding = VarianceEmbedding(1, self.hidden_dim, self.embedding_kernel_size, self.dropout)
-        # Energy
-        self.energy_predictor = VariancePredictor(self.hidden_dim, self.hidden_dim, self.predictor_kernel_size, 
-                                                            dropout=self.dropout)
-        self.energy_embedding = VarianceEmbedding(1, self.hidden_dim, self.embedding_kernel_size, self.dropout)
-        # Phoneme
+        # # Pitch
+        # self.pitch_predictor = VariancePredictor(self.hidden_dim, self.hidden_dim, self.predictor_kernel_size, 
+        #                                                     dropout=self.dropout)
+        # self.pitch_embedding = VarianceEmbedding(1, self.hidden_dim, self.embedding_kernel_size, self.dropout)
+        # # Energy
+        # self.energy_predictor = VariancePredictor(self.hidden_dim, self.hidden_dim, self.predictor_kernel_size, 
+        #                                                     dropout=self.dropout)
+        # self.energy_embedding = VarianceEmbedding(1, self.hidden_dim, self.embedding_kernel_size, self.dropout)
+        # # Phoneme
         self.ln = nn.LayerNorm(self.hidden_dim)
 
         # Length regulator
-        self.length_regulator = LengthRegulator(self.hidden_dim, config.max_seq_len)
+        self.length_regulator = LengthRegulator(self.hidden_dim, self.max_sequence_len)
     
     def forward(self, x, src_mask, mel_len=None, mel_mask=None, 
                         duration_target=None, pitch_target=None, energy_target=None, max_len=None):
         # Duration
         log_duration_prediction = self.duration_predictor(x, src_mask)
 
-        # Pitch & Energy 
-        pitch_prediction = self.pitch_predictor(x, src_mask) 
-        if pitch_target is not None:
-            pitch_embedding = self.pitch_embedding(pitch_target.unsqueeze(-1))
-        else:
-            pitch_embedding = self.pitch_embedding(pitch_prediction.unsqueeze(-1))
+        # # Pitch & Energy 
+        # pitch_prediction = self.pitch_predictor(x, src_mask) 
+        # if pitch_target is not None:
+        #     pitch_embedding = self.pitch_embedding(pitch_target.unsqueeze(-1))
+        # else:
+        #     pitch_embedding = self.pitch_embedding(pitch_prediction.unsqueeze(-1))
 
-        energy_prediction = self.energy_predictor(x, src_mask) 
-        if energy_target is not None:
-            energy_embedding = self.energy_embedding(energy_target.unsqueeze(-1))
-        else:
-            energy_embedding = self.energy_embedding(energy_prediction.unsqueeze(-1))
+        # energy_prediction = self.energy_predictor(x, src_mask) 
+        # if energy_target is not None:
+        #     energy_embedding = self.energy_embedding(energy_target.unsqueeze(-1))
+        # else:
+        #     energy_embedding = self.energy_embedding(energy_prediction.unsqueeze(-1))
 
-        x = self.ln(x) + pitch_embedding + energy_embedding
+        x = self.ln(x) #+ pitch_embedding + energy_embedding
 
         # Length regulate
         if duration_target is not None:
             output, pe, mel_len = self.length_regulator(x, duration_target, max_len)
-            mel_mask = utils.get_mask_from_lengths(mel_len)
+            mel_mask = get_mask_from_lengths(mel_len)
         else:
             duration_rounded = torch.clamp(torch.round(torch.exp(log_duration_prediction)-1.0), min=0)            
             duration_rounded = duration_rounded.masked_fill(src_mask, 0).long()
             output, pe, mel_len = self.length_regulator(x, duration_rounded)
-            mel_mask = utils.get_mask_from_lengths(mel_len)
+            mel_mask = get_mask_from_lengths(mel_len)
 
         # Phoneme-wise positional encoding
         output = output + pe
-        return output, log_duration_prediction, pitch_prediction, energy_prediction, mel_len, mel_mask
+        return output, log_duration_prediction, mel_len, mel_mask#pitch_prediction, energy_prediction, mel_len, mel_mask
 
 
 class LengthRegulator(nn.Module):
@@ -76,17 +85,24 @@ class LengthRegulator(nn.Module):
         mel_len = list()
         for batch, expand_target in zip(x, duration):
             expanded, pos = self.expand(batch, expand_target)
-            output.append(expanded)
             position.append(pos)
             mel_len.append(expanded.shape[0])
+            extended = torch.transpose(extended, 0, 1)
+            output.append(expanded)
 
-        if max_len is not None:
-            output = utils.pad(output, max_len)
-            position = utils.pad(position, max_len)
-        else:
-            output = utils.pad(output)
-            position = utils.pad(position)
-        return output, position, torch.LongTensor(mel_len).cuda()
+        # if max_len is not None:
+        #     output = utils.pad(output, max_len)
+        #     position = utils.pad(position, max_len)
+        # else:
+        #     output = utils.pad(output)
+        #     position = utils.pad(position)
+
+        output = pad_sequence(output, batch_first=True)
+        output = torch.transpose(output, 1, 2)
+        position = pad_sequence(position, batch_first=True)
+
+
+        return output, position, torch.LongTensor(mel_len)
 
     def expand(self, batch, predicted):
         out = list()
@@ -155,3 +171,11 @@ class VarianceEmbedding(nn.Module):
         out = self.dropout(self.fc(x))
         return out
 
+def get_mask_from_lengths(lengths, max_len=None):
+    batch_size = lengths.shape[0]
+    if max_len is None:
+        max_len = torch.max(lengths).item()
+
+    ids = torch.arange(0, max_len).unsqueeze(0).expand(batch_size, -1).cuda()
+    mask = (ids >= lengths.unsqueeze(1).expand(-1, max_len))
+    return mask

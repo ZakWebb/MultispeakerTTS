@@ -21,27 +21,55 @@ def TTSDataset_collater(input, output, data):
     pre_inputs = [sample["input"] for sample in data]
     pre_outputs = [sample["output"] for sample in data]
 
-    post_inputs, input_mask= collater(input, pre_inputs)
-    post_outputs, output_mask  = collater(output, pre_outputs)
+    post_inputs = collater(input, pre_inputs)
+    post_outputs  = collater(output, pre_outputs)
 
-    return post_inputs, input_mask, post_outputs, output_mask
+    ret = {"inputs": post_inputs,
+            "outputs": post_outputs}
+
+    return ret
 
 def collater(datatype, data):
     cur_data=[]
+    lens = []
     if datatype in {"mels", "wavs"}:
         for point in data:
             cur_data.append(torch.transpose(point,0,1))
     else:
         cur_data = data
+
+    for point in cur_data:
+        lens.append(point.size(0))
+
+    lens = torch.tensor(lens)
             
     collated = pad_sequence(cur_data, batch_first=True)
-    mask = (torch.clone(collated)).apply_(lambda x : 1.0 if x != 0.0 else 0.0)
+    mask = get_mask_from_lens(lens, collated.size())
 
     if datatype in  {"mels", "wavs"}:
         collated = torch.transpose(collated, 1, 2)
         mask = torch.transpose(mask, 1, 2)
+    
+    ret = {"data": collated,
+            "mask": mask,
+            "lens": lens}
 
-    return collated, mask
+    return ret
+
+def get_mask_from_lens(lens, req_size):
+    batch_size = lens.shape[0]
+    max_len = torch.max(lens).item()
+
+    ids = torch.arange(0, max_len).unsqueeze(0).expand(batch_size, -1)
+    mask = (ids >= lens.unsqueeze(1).expand(-1, max_len))
+
+    while (len(mask.size())) < len(req_size):
+        mask = mask.unsqueeze(-1)
+    
+    mask = mask.expand(req_size)
+
+    return mask.clone()
+
 
 
 class TTSDataset(Dataset):
@@ -98,57 +126,3 @@ class TTSDataset(Dataset):
         output_item = self.get_file_data(self.files[idx], self.output)
 
         return {"input": input_item, "output": output_item}
-
-def pad_1D(inputs, PAD=0):
-    def pad_data(x, length, PAD):
-        x_padded = np.pad(
-            x, (0, length - x.shape[0]), mode="constant", constant_values=PAD
-        )
-        return x_padded
-
-    max_len = max((len(x) for x in inputs))
-    padded = np.stack([pad_data(x, max_len, PAD) for x in inputs])
-
-    return padded
-
-
-def pad_2D(inputs, maxlen=None):
-    def pad(x, max_len):
-        PAD = 0
-        if np.shape(x)[0] > max_len:
-            raise ValueError("not max_len")
-
-        s = np.shape(x)[1]
-        x_padded = np.pad(
-            x, (0, max_len - np.shape(x)[0]), mode="constant", constant_values=PAD
-        )
-        return x_padded[:, :s]
-
-    if maxlen:
-        output = np.stack([pad(x, maxlen) for x in inputs])
-    else:
-        max_len = max(np.shape(x)[0] for x in inputs)
-        output = np.stack([pad(x, max_len) for x in inputs])
-
-    return output
-
-
-def pad(input_ele, mel_max_length=None):
-    if mel_max_length:
-        max_len = mel_max_length
-    else:
-        max_len = max([input_ele[i].size(0) for i in range(len(input_ele))])
-
-    out_list = list()
-    for i, batch in enumerate(input_ele):
-        if len(batch.shape) == 1:
-            one_batch_padded = F.pad(
-                batch, (0, max_len - batch.size(0)), "constant", 0.0
-            )
-        elif len(batch.shape) == 2:
-            one_batch_padded = F.pad(
-                batch, (0, 0, 0, max_len - batch.size(0)), "constant", 0.0
-            )
-        out_list.append(one_batch_padded)
-    out_padded = torch.stack(out_list)
-    return out_padded

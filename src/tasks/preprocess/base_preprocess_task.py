@@ -1,5 +1,8 @@
 import importlib
 import os
+import subprocess
+import shlex
+
 from tasks.base_task import BaseTask
 from tasks.text_cleaners import BaseTextCleaner, get_cleaner
 from tasks.text_to_phoneme import BaseText2Phoneme, get_t2p
@@ -25,7 +28,7 @@ def get_preprocessor_cls(cls):
         return preprocessor_cls
 
 
-_NEEDED_DATA = {"raw_text", "cleaned_text", "phonemes", "mels", "wavs"}
+_NEEDED_DATA = {"raw_text", "data", "textgrid", "phonemes", "mels"}
 
 class BasePreprocessTask(BaseTask):
     def __init__(self, config):
@@ -50,6 +53,9 @@ class BasePreprocessTask(BaseTask):
         self.cleaner = get_cleaner(config)(config)
         self.t2p = get_t2p(config)(config)
 
+        self.silence_boost = config.get("silence_boost", 1)
+        self.mfa_processes = config.get("mfa_processes", 10)
+
     
     def build_dirs(self):
         os.makedirs(self.data_dir, exist_ok = True)
@@ -59,8 +65,34 @@ class BasePreprocessTask(BaseTask):
                 os.makedirs(os.path.join(self.data_dir, split, type), exist_ok = True)
 
     def build_files(self):
-        raise NotImplemented
+        raise NotImplementedError
+
+    def run_aligner(self):
+        for split in {"train", "valid", "test"}:
+            print("Aligning {} data", split)
+            process = subprocess.Popen(shlex.split("mfa align {} english_us_arpa english_us_arpa {} -boost_silence={} -j={}".format(
+                                                                os.path.join(self.data_dir, split, "data"),
+                                                                os.path.join(self.data_dir, split, "textgrids"),
+                                                                self.silence_boost,
+                                                                self.mfa_processes
+                                        )),
+                                        stout=subprocess.PIPE,
+                                        universal_newlines=True)
+            while True:
+                output = process.stdout.readline()
+                print(output.strip())
+                return_code = process.poll()
+                if return_code is not None:
+                    print('RETURN CODE', return_code)
+                    for output in process.stdout.readlines():
+                        print(output.strip())
+                    break
+
+    def process_textgrids(self):
+        raise NotImplementedError
     
     def start(self):
         self.build_dirs()
         self.build_files()
+        self.run_aligner()
+        self.process_textgrids()

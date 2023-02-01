@@ -36,19 +36,22 @@ class FastDiff(LightningModule):
         self.compute_hyperparams_given_schedule(noise_schedule)
 
     def forward(self, batch):
-        mels, mel_mask, _, _ = batch  # need to add mel_mask to this somehow
+        inputs= batch["inputs"]  # need to add mel_mask to this somehow
+        outputs = batch["outputs"]
+        mels = inputs["data"]
+        mel_mask = inputs["mask"]
         #audio_length = (mels.shape[-1] - 1) * self.hop_length + self.win_length
         audio_length = mels.size(-1) * self.hop_length
         ones = torch.ones(mels.size(0), 1, device=self.device)
         audio_mask = torch.repeat_interleave(mel_mask, self.hop_length, dim=2)
         audio_mask = audio_mask[:,0,:].view(mels.size(0), 1, -1)
 
-        x = torch.mul(torch.normal(0., 1., size=(mels.size(0), 1, audio_length,), device=self.device), audio_mask)
+        x = torch.normal(0., 1., size=(mels.size(0), 1, audio_length,), device=self.device).masked_fill(audio_mask, 0)
         
 
         for n in range(self.T - 1, -1, -1):
                 diffusion_steps = self.steps_infer[n] * ones
-                epsilon_theta = torch.mul(self.model((x, mels, diffusion_steps)), audio_mask)
+                epsilon_theta = self.model((x, mels, diffusion_steps)).masked_fill(audio_mask, 0)
                 # if ddim:
                 #     alpha_next = self.alpha[n] / (1 - self.beta[n]).sqrt()
                 #     c1 = alpha_next / self.alpha[n]
@@ -63,7 +66,7 @@ class FastDiff(LightningModule):
                 x -= self.beta[n] / torch.sqrt(1 - self.alpha[n] ** 2.) * epsilon_theta
                 x /= torch.sqrt(1 - self.beta[n])
                 if n > 0:
-                    x = x + self.sigma[n] * torch.mul(torch.normal(0.0, 1.0, size=(audio_length,), device=self.device), audio_mask)
+                    x = x + self.sigma[n] * torch.normal(0.0, 1.0, size=(audio_length,), device=self.device).masked_fill(audio_mask, 0)
         
         return x
     
@@ -131,17 +134,22 @@ class FastDiff(LightningModule):
         theta loss
         """
 
-        mel_spectrogram, _, audio, audio_mask = batch
+        inputs = batch["inputs"]
+        mel_spectrogram = inputs["data"]
+        
+        outputs = batch["outputs"]
+        audio = outputs["data"]
+        audio_mask = outputs["mask"]
+
         B, C, L = audio.shape  # B is batchsize, C=1, L is audio length
         ts = torch.randint(self.T, size=(B, 1, 1), device=self.device)  # randomly sample steps from 1~T
-        z = torch.normal(0, 1, size=audio.shape, device=self.device)
-        z = torch.mul(z, audio_mask)
+        z = torch.normal(0, 1, size=audio.shape, device=self.device).masked_fill(audio_mask, 0)
         delta = (1 - self.alpha[ts] ** 2.).sqrt()
         alpha_cur = self.alpha[ts]
         noisy_audio = alpha_cur * audio + delta * z  # compute x_t from q(x_t|x_0)
         epsilon_theta = self.model((noisy_audio, mel_spectrogram, ts.view(B, 1)))
 
-        epsilon_theta = torch.mul(epsilon_theta, audio_mask[:,:,:epsilon_theta.size(2)])
+        epsilon_theta = epsilon_theta.masked_fill(audio_mask[:,:,:epsilon_theta.size(2)], 0)
 
 
         z = z[:,:,:epsilon_theta.size(2)]

@@ -12,6 +12,7 @@ load_ckpt: true
 trainable: true
 train: true
 
+
 batch_size: 4
 shuffle: true
 

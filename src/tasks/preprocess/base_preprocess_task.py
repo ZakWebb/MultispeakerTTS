@@ -28,7 +28,7 @@ def get_preprocessor_cls(cls):
         return preprocessor_cls
 
 
-_NEEDED_DATA = {"raw_text", "data", "textgrid", "phonemes", "mels"}
+_NEEDED_DATA = {"raw_text", "data", "textgrids", "phonemes", "mels"}
 
 class BasePreprocessTask(BaseTask):
     def __init__(self, config):
@@ -55,6 +55,7 @@ class BasePreprocessTask(BaseTask):
 
         self.silence_boost = config.get("silence_boost", 1)
         self.mfa_processes = config.get("mfa_processes", 10)
+        self.run_align = config.get("run_align", True)
 
     
     def build_dirs(self):
@@ -67,16 +68,31 @@ class BasePreprocessTask(BaseTask):
     def build_files(self):
         raise NotImplementedError
 
-    def run_aligner(self):
+    def aligner(self):
         for split in {"train", "valid", "test"}:
-            print("Aligning {} data", split)
-            process = subprocess.Popen(shlex.split("mfa align {} english_us_arpa english_us_arpa {} -boost_silence={} -j={}".format(
+            print("Aligning {} data".format(split))
+            # process = subprocess.Popen(shlex.split("mfa validate \"{}\" english_us_arpa english_us_arpa".format(
+            #                                                     os.path.join(self.data_dir, split, "data")
+            #                             )),
+            #                             stdout=subprocess.PIPE,
+            #                             universal_newlines=True)
+            # while True:
+            #     output = process.stdout.readline()
+            #     print(output.strip())
+            #     return_code = process.poll()
+            #     if return_code is not None:
+            #         print('RETURN CODE', return_code)
+            #         for output in process.stdout.readlines():
+            #             print(output.strip())
+            #         break
+
+            process = subprocess.Popen(shlex.split("mfa align \"{}\" english_us_arpa english_us_arpa \"{}\" -boost_silence={} -j={} --clean".format(
                                                                 os.path.join(self.data_dir, split, "data"),
                                                                 os.path.join(self.data_dir, split, "textgrids"),
                                                                 self.silence_boost,
                                                                 self.mfa_processes
                                         )),
-                                        stout=subprocess.PIPE,
+                                        stdout=subprocess.PIPE,
                                         universal_newlines=True)
             while True:
                 output = process.stdout.readline()
@@ -94,5 +110,6 @@ class BasePreprocessTask(BaseTask):
     def start(self):
         self.build_dirs()
         self.build_files()
-        self.run_aligner()
+        if self.run_align:
+            self.aligner()
         self.process_textgrids()

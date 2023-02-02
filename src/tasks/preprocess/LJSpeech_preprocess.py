@@ -22,7 +22,13 @@ class LJSpeechPreprocess(BasePreprocessTask):
             for split in {"train", "valid", "test"}:
                 texts = []
                 with open(os.path.join(self.data_dir, split, "{}_metadata.csv".format(split))) as f:
-                    # get this working
+                    for line in f:
+                        line = line.strip()
+                        with open(os.path.join(self.data_dir, split, "data", "{}.txt".format(line))) as g:
+                            text = g.readline().strip()
+                            texts.append((line, text))
+                returnable[split] = texts
+            return returnable
 
         else:
             texts = []
@@ -43,13 +49,13 @@ class LJSpeechPreprocess(BasePreprocessTask):
         for type in {"train", "valid", "test"}:
             texts = self.texts[type]
             current_ids = []
-            for id, text in tqdm(texts, desc="Working on {} inputs".format(type)):
+            for id, text in tqdm.tqdm(texts, desc="Working on {} inputs".format(type)):
                 current_ids.append(id)
                 raw_text_exists = os.path.exists(os.path.join(self.data_dir, type, "raw_text", id + ".txt"))
                 cleaned_text_exists = os.path.exists(os.path.join(self.data_dir, type, "data", id + ".txt"))
                 phonemes_exist = os.path.exists(os.path.join(self.data_dir, type, "phonemes", id + ".json"))
-                audio_exists = os.path.exists(os.path.join(self.data_dir, type, "data"))
-                mel_exists = os.path.exists(os.path.join(self.data_dir, type, "mels"))
+                audio_exists = os.path.exists(os.path.join(self.data_dir, type, "data", id + ".wav"))
+                mel_exists = os.path.exists(os.path.join(self.data_dir, type, "mels", id + ".mel"))
 
 
                 if not raw_text_exists:
@@ -80,6 +86,7 @@ class LJSpeechPreprocess(BasePreprocessTask):
                         f.write(id + "\n")
     
     def process_textgrids(self):
+        pass
         
 
 

@@ -86,6 +86,7 @@ class LJSpeechPreprocess(BasePreprocessTask):
                         f.write(id + "\n")
     
     def process_textgrids(self):
+        pass
         
 
 

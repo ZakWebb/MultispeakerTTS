@@ -52,7 +52,7 @@ class AudioReader(object):
             self.process_wav()
         if not self.computed_mel:
             audio = torch.from_numpy(self.audio)
-            audio = audio[None,None, :]
+            audio = audio[None, None, :]
             mel, _ = self.stft.mel_spectrogram(audio)
             self.mel = torch.squeeze(mel)
             self.computed_mel = True

@@ -23,6 +23,7 @@ class LJSpeechPreprocess(BasePreprocessTask):
                 texts = []
                 with open(os.path.join(self.data_dir, split, "{}_metadata.csv".format(split))) as f:
                     # get this working
+                    pass
 
         else:
             texts = []
@@ -80,6 +81,7 @@ class LJSpeechPreprocess(BasePreprocessTask):
                         f.write(id + "\n")
     
     def process_textgrids(self):
+        raise NotImplementedError
         
 
 

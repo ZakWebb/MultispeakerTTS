@@ -102,20 +102,24 @@ class TTSDataset(Dataset):
         return len(self.files)
     
     def get_file_data(self, name, datatype):
-        filename = os.path.join(self.data_dir, datatype, name)
+        filename = self.data_dir
         if datatype == "wavs":
-            self.audio.load_wav(os.path.join(self.data_dir, datatype), name)
+            self.audio.load_wav(os.path.join(self.data_dir, "data"), name)
             data = self.audio.get_wav()
             data = torch.from_numpy(data).unsqueeze(0)
         elif datatype == "mels":
-            filename = filename + ".mel"
+            filename = os.path.join(filename, "mels", name + ".mel")
             data = torch.load(filename)
         elif datatype == "phonemes":
-            filename = filename + ".json"
+            filename = os.path.join(filename, "phonemes", name + ".json")
             with open(filename, 'r') as f:
                 data = json.load(f)
+        elif datatype == "cleaned_text":
+            filename = os.path.join(filename, "data", name + ".txt")
+            with open(filename, 'r') as f:
+                data = f.read()
         else:
-            filename = filename + ".txt"
+            filename = os.path.join(filename, datatype, name + ".txt")
             with open(filename, 'r') as f:
                 data = f.read()
         

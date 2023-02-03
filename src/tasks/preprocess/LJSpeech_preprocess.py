@@ -1,9 +1,12 @@
 from tasks.preprocess.base_preprocess_task import BasePreprocessTask, register_preprocessor
+from data_gen.symbols import symbol_to_id
 
 import os
 import random
 import json
 import tqdm
+import textgrids
+import torch
 
 @register_preprocessor
 class LJSpeechPreprocess(BasePreprocessTask):
@@ -85,8 +88,50 @@ class LJSpeechPreprocess(BasePreprocessTask):
                     for id in current_ids:
                         f.write(id + "\n")
     
+    def check_dir_complete(self, split, datatype):
+        texts = self.texts[split]
+        
+        if datatype in {"wavs", "cleaned_text"}:
+            datadir = "data"
+        else:
+            datadir = datatype
+
+        extensions = {
+            "cleaned_text": ".txt",
+            "raw_text": ".txt",
+            "wavs": ".wav",
+            "mels": ".mel",
+            "textgrids": ".TextGrid",
+            "durations": ".dur",
+            "phonemes": ".json"
+        }
+
+        extension = extensions[datatype]
+
+        for id, _ in texts:
+            if not os.path.exists(os.path.join(self.data_dir, split, datadir, id + extension)):
+                return False
+        
+        return True
+
     def process_textgrids(self):
-        pass
+        for datatype in {"train", "valid", "test"}:
+            texts = self.texts[datatype]
+
+            for id, _ in texts:
+                grid = textgrids.TextGrid(os.path.join(self.data_dir, datatype, "textgrids", id + ".TextGrid"))
+                phones = list(map(lambda x: x['label'], grid.interval_tier_to_array("phones")))
+                phone_ids = list(map(lambda x: symbol_to_id["@sp" if x == '' else "@" + x], phones))
+                dur = list(map(lambda x: round(self.sample_rate * (x['end'] - x['begin'])), grid.interval_tier_to_array("phones")))
+
+                with open(os.path.join(self.data_dir, datatype, "phonemes", id + ".json"),'w') as f:
+                    json.dump(phone_ids, f)
+                
+                
+                torch.save(torch.tensor(dur), os.path.join(self.data_dir, datatype, "durations", id + ".dur"))
+
+
+
         
 
 

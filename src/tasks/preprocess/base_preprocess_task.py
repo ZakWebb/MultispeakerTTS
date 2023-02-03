@@ -28,7 +28,7 @@ def get_preprocessor_cls(cls):
         return preprocessor_cls
 
 
-_NEEDED_DATA = {"raw_text", "data", "textgrids", "phonemes", "mels"}
+_NEEDED_DATA = {"raw_text", "data", "textgrids", "phonemes", "mels", "durations"}
 
 class BasePreprocessTask(BaseTask):
     def __init__(self, config):
@@ -68,9 +68,13 @@ class BasePreprocessTask(BaseTask):
     def build_files(self):
         raise NotImplementedError
 
+    def check_dir_complete(self, split, datatype):
+        raise NotImplementedError
+
     def aligner(self):
         for split in {"train", "valid", "test"}:
             print("Aligning {} data".format(split))
+            all_correct = self.check_dir_complete(split, "textgrids")
             # process = subprocess.Popen(shlex.split("mfa validate \"{}\" english_us_arpa english_us_arpa".format(
             #                                                     os.path.join(self.data_dir, split, "data")
             #                             )),
@@ -85,24 +89,24 @@ class BasePreprocessTask(BaseTask):
             #         for output in process.stdout.readlines():
             #             print(output.strip())
             #         break
-
-            process = subprocess.Popen(shlex.split("mfa align \"{}\" english_us_arpa english_us_arpa \"{}\" -boost_silence={} -j={} --clean".format(
-                                                                os.path.join(self.data_dir, split, "data"),
-                                                                os.path.join(self.data_dir, split, "textgrids"),
-                                                                self.silence_boost,
-                                                                self.mfa_processes
-                                        )),
-                                        stdout=subprocess.PIPE,
-                                        universal_newlines=True)
-            while True:
-                output = process.stdout.readline()
-                print(output.strip())
-                return_code = process.poll()
-                if return_code is not None:
-                    print('RETURN CODE', return_code)
-                    for output in process.stdout.readlines():
-                        print(output.strip())
-                    break
+            if not all_correct:
+                process = subprocess.Popen(shlex.split("mfa align \"{}\" english_us_arpa english_us_arpa \"{}\" -boost_silence={} -j={} --clean".format(
+                                                                    os.path.join(self.data_dir, split, "data"),
+                                                                    os.path.join(self.data_dir, split, "textgrids"),
+                                                                    self.silence_boost,
+                                                                    self.mfa_processes
+                                            )),
+                                            stdout=subprocess.PIPE,
+                                            universal_newlines=True)
+                while True:
+                    output = process.stdout.readline()
+                    print(output.strip())
+                    return_code = process.poll()
+                    if return_code is not None:
+                        print('RETURN CODE', return_code)
+                        for output in process.stdout.readlines():
+                            print(output.strip())
+                        break
 
     def process_textgrids(self):
         raise NotImplementedError

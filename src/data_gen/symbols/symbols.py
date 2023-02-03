@@ -18,3 +18,6 @@ _arpabet = ['@' + s for s in valid_symbols]
 # Export all symbols:
 symbols = [_pad] + list(_special) + list(_punctuation) + \
         list(_letters) + _arpabet + _silences
+
+
+symbol_to_id = {s: i for i, s in enumerate(symbols)}

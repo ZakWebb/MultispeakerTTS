@@ -7,6 +7,7 @@ from tasks.base_task import BaseTask
 from tasks.text_cleaners import BaseTextCleaner, get_cleaner
 from tasks.text_to_phoneme import BaseText2Phoneme, get_t2p
 from data_gen.audio import AudioReader
+import numpy as np
 
 
 _PREPROCESSORS = {}
@@ -28,7 +29,7 @@ def get_preprocessor_cls(cls):
         return preprocessor_cls
 
 
-_NEEDED_DATA = {"raw_text", "data", "textgrids", "phonemes", "mels", "durations"}
+_NEEDED_DATA = {"raw_text", "data", "textgrids", "phonemes", "mels", "durations", "energy", "f0"}
 
 class BasePreprocessTask(BaseTask):
     def __init__(self, config):
@@ -37,6 +38,7 @@ class BasePreprocessTask(BaseTask):
         self.raw_data_dir = config["raw_data_dir"]
         self.data_dir = config["data_dir"]
         self.sample_rate = config["sample_rate"]
+        self.hop_length = config["hop_length"]
         #self.meta_data = self.get_meta_data(config)
 
         self.train_percentage = config["train_percentage"]
@@ -117,3 +119,18 @@ class BasePreprocessTask(BaseTask):
         if self.run_align:
             self.aligner()
         self.process_textgrids()
+
+    def average_by_duration(self, x, durs):
+        length = sum(durs)
+        durs_cum = np.cumsum(np.pad(durs, (1, 0), mode='constant'))
+
+        # calculate charactor f0/energy
+        if len(x.shape) == 2:
+            x_char = np.zeros((durs.shape[0], x.shape[1]), dtype=np.float32)
+        else:
+            x_char = np.zeros((durs.shape[0],), dtype=np.float32)
+        for idx, start, end in zip(range(length), durs_cum[:-1], durs_cum[1:]):
+            values = x[start:end][np.where(x[start:end] != 0.0)[0]]
+            x_char[idx] = np.mean(values, axis=0) if len(values) > 0 else 0.0  # np.mean([]) = nan.
+
+        return x_char.astype(np.float32)

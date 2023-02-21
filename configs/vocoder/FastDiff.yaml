@@ -5,6 +5,7 @@ vocoder: "FastDiff"
 model_config: "FastDiff/FastDiff_model.yaml"
 data_dir: "D:/Speech Data/LJ/LJSpeech-1.1/Processed_Data"
 work_dir: "../models"
+#ckpt: "../models/vocoder/FastDiff/FastDiff-restart-1.ckpt"
 save_top_k: 5
 save_last_k: 10
 load_ckpt: true

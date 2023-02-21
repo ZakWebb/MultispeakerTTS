@@ -44,6 +44,7 @@ class BaseLit(BaseConversion):
         collate_fn = get_TTSDataset_collater(self.input, self.output)
 
         self.limit_predict_batches = config.get("limit_predict_batches", 1.0)
+        self.max_epochs = config.get("max_epochs", -1)
 
         if self.trainable:
             self.train_loader = DataLoader(TTSDataset(config, self.input, self.output, "train"), self.batch_size, self.shuffle, num_workers=self.num_workers, collate_fn=collate_fn, pin_memory=self.pin_memory, persistent_workers=True)
@@ -82,7 +83,8 @@ class BaseLit(BaseConversion):
                                     accumulate_grad_batches=self.accumulate_gradient,
                                     log_every_n_steps=25,
                                     limit_predict_batches=self.limit_predict_batches,
-                                    profiler=AdvancedProfiler(dirpath=self.ckpt_dir, filename="perf_logs")
+                                    profiler=AdvancedProfiler(dirpath=self.ckpt_dir, filename="perf_logs"),
+                                    max_epochs=self.max_epochs
                                 )
 
     def train(self):

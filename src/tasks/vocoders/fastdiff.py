@@ -35,6 +35,41 @@ class FastDiff(LightningModule):
         noise_schedule = torch.linspace(self.beta_0, self.beta_T, self.T, device=self.device)
         self.compute_hyperparams_given_schedule(noise_schedule)
 
+        if config['noise_schedule'] != '':
+            noise_schedule = config['noise_schedule']
+            if isinstance(noise_schedule, list):
+                noise_schedule = torch.FloatTensor(noise_schedule).cuda()
+        else:
+            # Select Schedule
+            try:
+                reverse_step = int(config.get('N'))
+            except:
+                print('Please specify $N (the number of revere iterations) in config file. Now denoise with 4 iterations.')
+                reverse_step = 4
+            if reverse_step == 1000:
+                noise_schedule = torch.linspace(0.000001, 0.01, 1000).cuda()
+            elif reverse_step == 200:
+                noise_schedule = torch.linspace(0.0001, 0.02, 200).cuda()
+
+            # Below are schedules derived by Noise Predictor.
+            elif reverse_step == 8:
+                noise_schedule = [6.689325005027058e-07, 1.0033881153503899e-05, 0.00015496854030061513,
+                                 0.002387222135439515, 0.035597629845142365, 0.3681158423423767, 0.4735414385795593, 0.5]
+            elif reverse_step == 6:
+                noise_schedule = [1.7838445955931093e-06, 2.7984189728158526e-05, 0.00043231004383414984,
+                                  0.006634317338466644, 0.09357017278671265, 0.6000000238418579]
+            elif reverse_step == 4:
+                noise_schedule = [3.2176e-04, 2.5743e-03, 2.5376e-02, 7.0414e-01]
+            elif reverse_step == 3:
+                noise_schedule = [9.0000e-05, 9.0000e-03, 6.0000e-01]
+            else:
+                raise NotImplementedError
+
+            if isinstance(noise_schedule, list):
+                noise_schedule = torch.FloatTensor(noise_schedule)
+        
+        self.compute_infer_hyperparams_given_schedule(noise_schedule)
+
     def forward(self, batch):
         inputs= batch["inputs"]  # need to add mel_mask to this somehow
         outputs = batch["outputs"]
@@ -48,8 +83,7 @@ class FastDiff(LightningModule):
 
         x = torch.normal(0., 1., size=(mels.size(0), 1, audio_length,), device=self.device).masked_fill(audio_mask, 0)
         
-
-        for n in range(self.T - 1, -1, -1):
+        for n in range(self.T_infer - 1, -1, -1):
                 diffusion_steps = self.steps_infer[n] * ones
                 epsilon_theta = self.model((x, mels, diffusion_steps)).masked_fill(audio_mask, 0)
                 # if ddim:
@@ -63,10 +97,10 @@ class FastDiff(LightningModule):
                 #     x /= torch.sqrt(1 - self.beta[n])
                 #     if n > 0:
                 #         x = x + sigma_infer[n] * std_normal(size)
-                x -= self.beta[n] / torch.sqrt(1 - self.alpha[n] ** 2.) * epsilon_theta
-                x /= torch.sqrt(1 - self.beta[n])
+                x -= self.beta_infer[n] / torch.sqrt(1 - self.alpha_infer[n] ** 2.) * epsilon_theta
+                x /= torch.sqrt(1 - self.beta_infer[n])
                 if n > 0:
-                    x = x + self.sigma[n] * torch.normal(0.0, 1.0, size=(audio_length,), device=self.device).masked_fill(audio_mask, 0)
+                    x = x + self.sigma_infer[n] * torch.normal(0.0, 1.0, size=(audio_length,), device=self.device).masked_fill(audio_mask, 0)
         
         return x
     
@@ -142,12 +176,15 @@ class FastDiff(LightningModule):
         audio_mask = outputs["mask"]
 
         B, C, L = audio.shape  # B is batchsize, C=1, L is audio length
-        ts = torch.randint(self.T, size=(B, 1, 1), device=self.device)  # randomly sample steps from 1~T
-        z = torch.normal(0, 1, size=audio.shape, device=self.device).masked_fill(audio_mask, 0)
-        delta = (1 - self.alpha[ts] ** 2.).sqrt()
-        alpha_cur = self.alpha[ts]
-        noisy_audio = alpha_cur * audio + delta * z  # compute x_t from q(x_t|x_0)
-        epsilon_theta = self.model((noisy_audio, mel_spectrogram, ts.view(B, 1)))
+        t = torch.randint(self.T, size=(1,), device=self.device)
+        #ts = torch.randint(self.T, size=(B, 1, 1), device=self.device)  # randomly sample steps from 1~T
+        with torch.no_grad():
+            for i in torch.arange(self.T-1, t[0]-1, -1, device = self.device):
+                z = torch.normal(0, 1, size=audio.shape, device=self.device).masked_fill(audio_mask, 0)
+                delta = (1 - self.alpha[i] ** 2.).sqrt()
+                alpha_cur = self.alpha[i]
+                noisy_audio = alpha_cur * audio + delta * z  # compute x_t from q(x_t|x_0)
+        epsilon_theta = self.model((noisy_audio, mel_spectrogram, t[0] * torch.ones((B,1), device=self.device)))
 
         epsilon_theta = epsilon_theta.masked_fill(audio_mask[:,:,:epsilon_theta.size(2)], 0)
 
@@ -195,14 +232,47 @@ class FastDiff(LightningModule):
             self.sigma = sigma
             self.noise_schedule = beta
 
+    def compute_infer_hyperparams_given_schedule(self, beta_infer):
+        """
+        Compute diffusion process hyperparameters
+        Parameters:
+        beta (tensor):  beta schedule
+        Returns:
+        a dictionary of diffusion hyperparameters including:
+            T (int), beta/alpha/sigma (torch.tensor on cpu, shape=(T, ))
+        T   hese cpu tensors are changed to cuda tensors on each individual gpu
+        """
+
+        T_infer = len(beta_infer)
+        alpha_infer = 1 - beta_infer
+        sigma_infer = beta_infer + 0
+        for t in range(1, T_infer):
+            alpha_infer[t] *= alpha_infer[t - 1]  # \alpha^2_t = \prod_{s=1}^t (1-\beta_s)
+            sigma_infer[t] *= (1 - alpha_infer[t - 1]) / (1 - alpha_infer[t])  # \sigma^2_t = \beta_t * (1-\alpha_{t-1}) / (1-\alpha_t)
+        alpha_infer = torch.sqrt(alpha_infer)
+        sigma_infer = torch.sqrt(sigma_infer)
+
+        # if not hasattr(self, "alpha_infer"):
+        #     self.register_buffer("alpha_infer", alpha_infer)
+        #     self.register_buffer('beta_infer', beta_infer)
+        #     self.register_buffer('sigma_infer', sigma_infer)
+        #     self.register_buffer('noise_schedule_infer', beta_infer)
+        # else:
+        self.alpha_infer = alpha_infer
+        self.beta_infer = beta_infer
+        self.sigma_infer = sigma_infer
+        self.noise_schedule_infer = beta_infer
+
         
         # Mapping noise scales to time steps
         steps_infer = []
-        for n in range(self.T):
-            step = map_noise_scale_to_time_step(self.alpha[n], self.alpha)
+        for n in range(T_infer):
+            step = map_noise_scale_to_time_step(self.alpha_infer[n], self.alpha)
             if step >= 0:
                 steps_infer.append(step)
         self.steps_infer = torch.FloatTensor(steps_infer, device=self.device)
+
+        self.T_infer = len(steps_infer)
 
     def training_epoch_end(self, training_step_outputs):
         self.log("global_step", self.global_step * 1.0) 

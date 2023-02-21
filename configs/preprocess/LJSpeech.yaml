@@ -5,10 +5,10 @@ preprocessor: "LJSpeech"
 # Data Directories
 ###################
 
-#raw_data_dir: "D:/Speech Data/LJ/LJSpeech-1.1"
-#data_dir: "D:/Speech Data/LJ/LJSpeech-1.1/Processed_Data"
-raw_data_dir: "C:/Users/zakww/OneDrive/Documents/Speech Data/Test"
-data_dir: "C:/Users/zakww/OneDrive/Documents/Speech Data/Test/Processed_Data"
+raw_data_dir: "D:/Speech Data/LJ/LJSpeech-1.1"
+data_dir: "D:/Speech Data/LJ/LJSpeech-1.1/Processed_Data"
+#raw_data_dir: "C:/Users/zakww/OneDrive/Documents/Speech Data/Test"
+#data_dir: "C:/Users/zakww/OneDrive/Documents/Speech Data/Test/Processed_Data"
 
 ###################
 # Text Cleaner
@@ -27,5 +27,5 @@ text_to_phoneme: "Simple English"
 ###################
 
 silence_boost: 10
-mfa_processes: 10
+mfa_processes: 20
 

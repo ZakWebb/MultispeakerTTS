@@ -1,6 +1,8 @@
 # MultispeakerTTS
 
-This is going to be a multi-speaker text-to-speech system, hopefully based on FastSpeech.  This is still a work in progress, so take everything with a grain of salt.
+This is an attempt to make a multispeaker TTS system with the ability to create random voices.  I'm still catching up to the state of the art, so things are currently in flux.
+
+
 
 Github References:
 
@@ -10,6 +12,15 @@ Github References:
 - [NVIDIA/waveglow](https://github.com/NVIDIA/waveglow)
 - [KevinMIN95/StyleSpeech](https://github.com/KevinMIN95/StyleSpeech)
 - [jik876/hifi-gan](https://github.com/jik876/hifi-gan)
+- [chatterbox](https://github.com/resemble-ai/chatterbox)
+- [CosyVoice](https://github.com/FunAudioLLM/CosyVoice)
+- [S3Tokenizer](https://github.com/xingchensong/S3Tokenizer)
+- [FunASR](https://github.com/modelscope/FunASR)
+- [FunCodec](https://github.com/modelscope/FunCodec)
+- [Matcha-TTS](https://github.com/shivammehta25/Matcha-TTS)
+- [AcademicCodec](https://github.com/yangdongchao/AcademiCodec)
+- [StyleTTS2](https://github.com/yl4579/StyleTTS2)
+
 
 Paper References:
 
@@ -17,3 +28,6 @@ Paper References:
 - [Neural Speech Synthesis with Transformer Network Paper](https://arxiv.org/abs/1809.08895)
 - [FastSpeech: Fast, Robust and Controllable Text to Speech](https://arxiv.org/abs/1905.09263)
 - [HiFi-GAN: Generative Adversarial Networks for Efficient and High Fidelity Speech Synthesis](https://arxiv.org/abs/2010.05646)
+- [FunAudioLLM: Voice Understanding and Generation Foundation Models for Natural Interaction Between Humans and LLMs](https://arxiv.org/abs/2407.04051v2)
+- [HiFi-Codec: Group-residual Vector quantization for High Fidelity Audio Codec](https://arxiv.org/abs/2305.02765)
+- [StyleTTS 2: Towards Human-Level Text-to-Speech through Style Diffusion and Adversarial Training with Large Speech Language Models](https://arxiv.org/abs/2306.07691)

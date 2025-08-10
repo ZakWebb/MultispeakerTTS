@@ -1,6 +1,10 @@
 # MultispeakerTTS
 
-This is an attempt to make a multispeaker TTS system with the ability to create random voices.  I'm still catching up to the state of the art, so things are currently in flux.
+This is an attempt to make a multispeaker TTS system with the ability to create random voices.  I'm still catching up to the state of the art, so things are currently in flux.  The current plan is to implement a version of CosyVoice 1.
+
+I'll admit, I like the idea of also using an Acoustic encoder in addition to a semantic encoder, similar to the Higgs Audio stuff.
+
+I really like DiTAR, in which they combine generative modeling and an autoregressive model.  I might instead try to implement something like this instead of CosyVoice.  I don't think the methods are completely incompatible, but I think it would be easier to modify DiTAR to add CosyVoice stuff than the other way around.  The only problem is that it doesn't look like there's a version of it online.  Oh well, that's kind of what I want.
 
 
 
@@ -20,6 +24,7 @@ Github References:
 - [Matcha-TTS](https://github.com/shivammehta25/Matcha-TTS)
 - [AcademicCodec](https://github.com/yangdongchao/AcademiCodec)
 - [StyleTTS2](https://github.com/yl4579/StyleTTS2)
+- [Higgs Audio v2](https://github.com/boson-ai/higgs-audio)
 
 
 Paper References:
@@ -31,3 +36,7 @@ Paper References:
 - [FunAudioLLM: Voice Understanding and Generation Foundation Models for Natural Interaction Between Humans and LLMs](https://arxiv.org/abs/2407.04051v2)
 - [HiFi-Codec: Group-residual Vector quantization for High Fidelity Audio Codec](https://arxiv.org/abs/2305.02765)
 - [StyleTTS 2: Towards Human-Level Text-to-Speech through Style Diffusion and Adversarial Training with Large Speech Language Models](https://arxiv.org/abs/2306.07691)
+- [BASE TTS: Lessons from building a billion-parameter Text-to-Speech model on 100K hours of data](https://arxiv.org/abs/2402.08093)
+- [Better speech synthesis through scaling](https://arxiv.org/abs/2305.07243)
+- [Neural Codec Language Models are Zero-Shot Text to Speech Synthesizers](https://arxiv.org/abs/2301.02111)
+- [DiTAR: Diffusion Transformer Autoregressive Modeling for Speech Generation](https://arxiv.org/abs/2502.03930)

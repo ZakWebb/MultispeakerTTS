@@ -9,3 +9,6 @@ __pycache__/
 
 # Don't include saved models
 /models/
+
+#Don't include virtual environment
+/.venv/

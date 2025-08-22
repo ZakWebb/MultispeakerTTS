@@ -40,3 +40,4 @@ Paper References:
 - [Better speech synthesis through scaling](https://arxiv.org/abs/2305.07243)
 - [Neural Codec Language Models are Zero-Shot Text to Speech Synthesizers](https://arxiv.org/abs/2301.02111)
 - [DiTAR: Diffusion Transformer Autoregressive Modeling for Speech Generation](https://arxiv.org/abs/2502.03930)
+- [Clip-TTS: Contrastive Text-content and Mel-spectrogram, A High-Huality Text-to-Speech Method based on Contextual Semantic Understanding](https://arxiv.org/abs/2502.18889v1)

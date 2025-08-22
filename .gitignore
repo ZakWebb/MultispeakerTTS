@@ -12,3 +12,7 @@ __pycache__/
 
 #Don't include virtual environment
 /.venv/
+
+/MNIST/
+
+/lightning_logs/

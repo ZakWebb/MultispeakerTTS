@@ -8,8 +8,6 @@ import math
 # PyTorch
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 
 MAX_LENGTH_DEFAULT_VALUE = 5000
 

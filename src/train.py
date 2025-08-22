@@ -2,6 +2,8 @@
 
 # # Copied from Matcha-TTS
 
+# So I need to figure out how to make a dataset, load a particular model
+# and then train that model using the given dataset
 
 
 

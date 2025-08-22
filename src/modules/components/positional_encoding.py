@@ -1,3 +1,7 @@
+# I basically copied this file from lightning.ai course on transformers and 
+# multi-headed attention
+
+
 # Standard Libraries
 import math
 

@@ -1,1 +1,1 @@
-from audio import prepare_mels
+from .audio import prepare_mels

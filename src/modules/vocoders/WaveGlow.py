@@ -2,15 +2,16 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.distributions.normal import Normal
 
 import lightning as pl
 
 
 
-from ..components import FlowStep, SqueezeLayer
+from ..components import FlowStep, SqueezeLayer, UpsampleNet
 
 
-class WaveGlow(pl.LightningModule):
+class WaveGlow(nn.Module):
     """Implements the WaveGlow model."""
 
     def __init__(self,
@@ -77,7 +78,51 @@ class WaveGlow(pl.LightningModule):
             output, logdet = self.squeeze_layer(output, logdet=logdet, reverse=True)
 
             return output, logdet
-        
+
+
+
+class WaveGlowLightning(pl.LightningModule):
+    def __init__(self,
+                 squeeze_factor=8,
+                 num_layers=12,
+                 wn_filter_width=3,
+                 wn_dilation_layers=8,
+                 wn_residual_channels=512,
+                 wn_dilation_channels=256,
+                 wn_skip_channels=256,
+                 local_condition_channels=None):
+        super().__init__()
+
+        self.squeeze_factor = squeeze_factor
+        self.num_layers = num_layers
+        self.num_scales = squeeze_factor // 2
+        self.num_layers=num_layers,
+        self.wn_filter_width=wn_filter_width,
+        self.wn_dilation_layers=wn_dilation_layers,
+        self.wn_residual_channels=wn_residual_channels,
+        self.wn_dilation_channels=wn_dilation_channels,
+        self.wn_skip_channels=wn_skip_channels,
+        self.local_condition_channels=local_condition_channels
+
+
+        self.model = WaveGlow(squeeze_factor=squeeze_factor,
+                 num_layers=num_layers,
+                 wn_filter_width=wn_filter_width,
+                 wn_dilation_layers=wn_dilation_layers,
+                 wn_residual_channels=wn_residual_channels,
+                 wn_dilation_channels=wn_dilation_channels,
+                 wn_skip_channels=wn_skip_channels,
+                 local_condition_channels=local_condition_channels)
+
+        self.upsampler = UpsampleNet(upsample_factor=200,
+                                     upsample_method="duplicate",
+                                     squeeze_factor=squeeze_factor)
+
+    def forward(self, x, logdet, reverse, local_condition):
+        return self.model(x, logdet, reverse, local_condition)
+
+
+    # Figure out a better optimizer
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.hparams.lr) # pyright: ignore[reportAttributeAccessIssue]
 
@@ -92,7 +137,15 @@ class WaveGlow(pl.LightningModule):
         self.lr_scheduler.step()
 
     def training_step(self, batch, batch_idx):
-        raise NotImplementedError
+        mel_input, wav_real = batch
+
+        wav_real = self.upsampler(wav_real)
+        logdet = torch.zeros_like(mel_input[:,0,0])
+        output_wav, logdet = self.model(mel_input, logdet=logdet,reverse=False,local_condition=wav_real)
+
+        likelihood = torch.sum(normal.log_prob(output_wav), (1,2))
+
+        return -(likelihood + logdet).mean()
     
     def validation_step(self, *args, **kwargs):
         raise NotImplementedError

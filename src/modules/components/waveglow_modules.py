@@ -219,7 +219,7 @@ class WaveNet(nn.Module):
         self.dilated_conv_layers = nn.ModuleList([
             GatedDilatedConv1d(
                 filter_width=filter_width,
-                dilation=dilations[dilation],
+                dilation=dilation,
                 residual_channels=residual_channels,
                 dilation_channels=dilation_channels,
                 skip_channels=skip_channels,

@@ -11,7 +11,7 @@ import torch
 from torch.utils.data import random_split, DataLoader, Dataset
 
 
-from ..utils import prepare_mels
+from utils import prepare_mels
 
 VALID_DATA_TYPES_LJSPEECH = ["mel_spectrogram", "text", "cleaned_text", "wav_file"]
 
@@ -36,7 +36,7 @@ class LJSpeech11Data(Dataset):
         self.data_dir = data_dir
         self.wav_dir = data_dir + "wavs/"
         self.mel_dir = data_dir + "mels/"
-        self.texts = pd.read_csv(data_dir + "metadata.csv", sep='|')
+        self.texts = pd.read_csv(data_dir + "metadata.csv", sep='|', header=None)
         self.valid_types = [input_data_type, output_data_type]
 
         self.num_utterances=13100

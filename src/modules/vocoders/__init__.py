@@ -1,1 +1,1 @@
-from WaveGlow import WaveGlow
+from .WaveGlow import WaveGlowLightning, WaveGlow

@@ -1,0 +1,1 @@
+from LJ_Speech_data import LJSpeech11

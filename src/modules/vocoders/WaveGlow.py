@@ -1,12 +1,16 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.optim as optim
 
-from torch.nn import functional as F
+import lightning as pl
+
+
+
 from ..components import FlowStep, SqueezeLayer
 
 
-class WaveGlow(nn.Module):
+class WaveGlow(pl.LightningModule):
     """Implements the WaveGlow model."""
 
     def __init__(self,
@@ -73,3 +77,25 @@ class WaveGlow(nn.Module):
             output, logdet = self.squeeze_layer(output, logdet=logdet, reverse=True)
 
             return output, logdet
+        
+    def configure_optimizers(self):
+        optimizer = optim.Adam(self.parameters(), lr=self.hparams.lr) # pyright: ignore[reportAttributeAccessIssue]
+
+        # We don't return the lr scheduler becasue we need to apply it per iteration, not per epoch
+        self.lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.hparams.max_iters) # pyright: ignore[reportAttributeAccessIssue]
+        
+        return optimizer
+    
+
+    def optimizer_step(self, epoch: int, batch_idx: int, optimizer, optimizer_closure= None):
+        super().optimizer_step(epoch, batch_idx, optimizer, optimizer_closure)
+        self.lr_scheduler.step()
+
+    def training_step(self, batch, batch_idx):
+        raise NotImplementedError
+    
+    def validation_step(self, *args, **kwargs):
+        raise NotImplementedError
+    
+    def test_step(self, batch, batch_idx):
+        raise NotImplementedError

@@ -71,7 +71,7 @@ class LJSpeech11Data(Dataset):
         data_type_check = "mel_spectrogram"
         if self.input_data_type == data_type_check or self.output_data_type == data_type_check:
             name = self.texts.iat[index, 0]
-            data = np.load(self.mel_dir + name + ".mel")
+            data = np.load(self.mel_dir + name + ".mel.npy")
             if self.input_data_type is data_type_check:
                 in_item = data
             if self.output_data_type is data_type_check:

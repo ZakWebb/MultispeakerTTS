@@ -117,6 +117,8 @@ class WaveGlowLightning(pl.LightningModule):
         self.upsampler = UpsampleNet(upsample_factor=200,
                                      upsample_method="duplicate",
                                      squeeze_factor=squeeze_factor)
+        
+        self.normal = Normal(loc=torch.tensor([0.0]),scale=torch.tensor([np.sqrt(0.5)]))
 
     def forward(self, x, logdet, reverse, local_condition):
         return self.model(x, logdet, reverse, local_condition)
@@ -143,7 +145,7 @@ class WaveGlowLightning(pl.LightningModule):
         logdet = torch.zeros_like(mel_input[:,0,0])
         output_wav, logdet = self.model(mel_input, logdet=logdet,reverse=False,local_condition=wav_real)
 
-        likelihood = torch.sum(normal.log_prob(output_wav), (1,2))
+        likelihood = torch.sum(self.normal.log_prob(output_wav), (1,2))
 
         return -(likelihood + logdet).mean()
     

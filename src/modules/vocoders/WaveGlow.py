@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from torch.distributions.normal import Normal
 
 import lightning as pl
@@ -16,6 +17,7 @@ class WaveGlow(nn.Module):
 
     def __init__(self,
                  squeeze_factor=8,
+                 n_mels=80,
                  num_layers=12,
                  wn_filter_width=3,
                  wn_dilation_layers=8,
@@ -55,6 +57,7 @@ class WaveGlow(nn.Module):
     def forward(self, input, logdet, reverse, local_condition):
         if not reverse:
             output, logdet = self.squeeze_layer(input, logdet=logdet, rerverse=False)
+            output = input
 
             early_outputs = []
             for i, layer in enumerate(self.layers):
@@ -83,6 +86,7 @@ class WaveGlow(nn.Module):
 
 class WaveGlowLightning(pl.LightningModule):
     def __init__(self,
+                 n_mels=80,
                  squeeze_factor=8,
                  num_layers=12,
                  wn_filter_width=3,
@@ -90,13 +94,15 @@ class WaveGlowLightning(pl.LightningModule):
                  wn_residual_channels=512,
                  wn_dilation_channels=256,
                  wn_skip_channels=256,
-                 local_condition_channels=None):
+                 local_condition_channels=None,
+                 lr=1e-3,
+                 max_iters=20000):
         super().__init__()
 
         self.squeeze_factor = squeeze_factor
         self.num_layers = num_layers
         self.num_scales = squeeze_factor // 2
-        self.num_layers=num_layers,
+        self.n_mels=80
         self.wn_filter_width=wn_filter_width,
         self.wn_dilation_layers=wn_dilation_layers,
         self.wn_residual_channels=wn_residual_channels,
@@ -105,7 +111,8 @@ class WaveGlowLightning(pl.LightningModule):
         self.local_condition_channels=local_condition_channels
 
 
-        self.model = WaveGlow(squeeze_factor=squeeze_factor,
+        self.model = WaveGlow(n_mels=n_mels,
+                 squeeze_factor=squeeze_factor,
                  num_layers=num_layers,
                  wn_filter_width=wn_filter_width,
                  wn_dilation_layers=wn_dilation_layers,
@@ -114,11 +121,17 @@ class WaveGlowLightning(pl.LightningModule):
                  wn_skip_channels=wn_skip_channels,
                  local_condition_channels=local_condition_channels)
 
-        self.upsampler = UpsampleNet(upsample_factor=200,
-                                     upsample_method="duplicate",
-                                     squeeze_factor=squeeze_factor)
+   #     self.upsampler = UpsampleNet(upsample_factor=200,
+    #                                 upsample_method="duplicate",
+    #                                 squeeze_factor=squeeze_factor)
         
-        self.normal = Normal(loc=torch.tensor([0.0]),scale=torch.tensor([np.sqrt(0.5)]))
+        loc = (torch.tensor(0.0)).to(self.device)
+        scale = (torch.tensor(np.sqrt(0.5))).to(self.device)
+
+        self.normal = Normal(loc,scale)
+
+        self.lr = lr
+        self.max_iters=max_iters
 
     def forward(self, x, logdet, reverse, local_condition):
         return self.model(x, logdet, reverse, local_condition)
@@ -126,10 +139,10 @@ class WaveGlowLightning(pl.LightningModule):
 
     # Figure out a better optimizer
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=self.hparams.lr) # pyright: ignore[reportAttributeAccessIssue]
+        optimizer = optim.Adam(self.parameters(), lr=self.lr) # pyright: ignore[reportAttributeAccessIssue]
 
         # We don't return the lr scheduler becasue we need to apply it per iteration, not per epoch
-        self.lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.hparams.max_iters) # pyright: ignore[reportAttributeAccessIssue]
+        self.lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.max_iters) # pyright: ignore[reportAttributeAccessIssue]
         
         return optimizer
     
@@ -141,16 +154,40 @@ class WaveGlowLightning(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         mel_input, wav_real = batch
 
-        wav_real = self.upsampler(wav_real)
-        logdet = torch.zeros_like(mel_input[:,0,0])
-        output_wav, logdet = self.model(mel_input, logdet=logdet,reverse=False,local_condition=wav_real)
+       # wav_real = self.upsampler(wav_real)
+        logdet = torch.zeros(mel_input.shape[0],device=self.device)
+
+        problem = mel_input.shape[-1] % (self.squeeze_factor)
+
+        problem = self.squeeze_factor - problem
+
+        mel_input = F.pad(mel_input, (problem//2, problem - problem//2), "constant", 0)
+
+        wav_real = F.pad(wav_real, (problem//2, problem - problem//2), "constant", 0)
+        output_wav, logdet = self.model(mel_input, logdet=logdet,reverse=True,local_condition=wav_real)
 
         likelihood = torch.sum(self.normal.log_prob(output_wav), (1,2))
 
         return -(likelihood + logdet).mean()
     
-    def validation_step(self, *args, **kwargs):
-        raise NotImplementedError
+    def validation_step(self, batch, **kwargs):
+        mel_input, wav_real = batch
+
+        problem = mel_input.shape[-1] % (self.squeeze_factor)
+
+        problem = self.squeeze_factor - problem
+
+        mel_input = F.pad(mel_input, (problem//2, problem - problem//2), "constant", 0)
+
+       # wav_real = self.upsampler(wav_real)
+        logdet = torch.zeros(mel_input.shape[0], device=self.device)
+        output_wav, logdet = self.model(mel_input, logdet=logdet,reverse=True,local_condition=wav_real)
+
+        print(output_wav.device)
+
+        likelihood = torch.sum(self.normal.log_prob(output_wav), (1,2))
+
+        return -(likelihood + logdet).mean()
     
     def test_step(self, batch, batch_idx):
         raise NotImplementedError

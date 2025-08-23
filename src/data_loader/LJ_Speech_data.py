@@ -3,7 +3,7 @@ from lightning.pytorch.utilities.types import TRAIN_DATALOADERS
 import pandas as pd
 import numpy as np
 import librosa
-
+from functools import partial
 
 import lightning as L
 
@@ -123,6 +123,11 @@ class LJSpeech11(L.LightningDataModule):
                  output_data="wav_file",
                  batch_size=32,
                  compute_mel_spectrogram=False,
+                 njt=False,
+                 n_train_workers=23,
+                 n_val_workers=23,
+                 n_test_workers=23,
+                 n_predict_workers=23,
         ):
         super().__init__()
         self.data_dir = data_dir
@@ -140,7 +145,13 @@ class LJSpeech11(L.LightningDataModule):
         self.output_data = output_data
         self.compute_mel_spectrogram = compute_mel_spectrogram
 
+        self.n_train_workers=n_train_workers
+        self.n_val_workers=n_val_workers
+        self.n_test_workers=n_test_workers
+        self.n_predict_workers=n_predict_workers
+
         self.batch_size=batch_size
+        self.njt=njt
 
 
     def setup(self, stage: str):
@@ -189,13 +200,26 @@ class LJSpeech11(L.LightningDataModule):
             )
 
     def train_dataloader(self):
-        return DataLoader(self.LJ_train, self.batch_size)
+        return DataLoader(self.LJ_train, self.batch_size, collate_fn=partial(_collate_fn_for_NJT_Tensors, njt=self.njt),num_workers=self.n_train_workers)
     
     def val_dataloader(self):
-        return DataLoader(self.LJ_val, self.batch_size)
+        return DataLoader(self.LJ_val, self.batch_size, collate_fn=partial(_collate_fn_for_NJT_Tensors, njt=self.njt), num_workers=self.n_val_workers)
     
     def test_dataloader(self):
-        return DataLoader(self.LJ_test, self.batch_size)
+        return DataLoader(self.LJ_test, self.batch_size, collate_fn=partial(_collate_fn_for_NJT_Tensors, njt=self.njt), num_workers=self.n_test_workers)
     
     def predict_dataloader(self):
-        return DataLoader(self.LJ_predict, self.batch_size)
+        return DataLoader(self.LJ_predict, self.batch_size, collate_fn=partial(_collate_fn_for_NJT_Tensors, njt=self.njt), num_workers=self.n_predict_workers)
+    
+def _collate_fn_for_NJT_Tensors(batch, njt=False):
+    sequences = [a for a,_ in batch]
+    labels = [b for _,b in batch]
+
+    sequences_NJT = torch.nested.nested_tensor(sequences, layout=torch.jagged)
+    labels_NJT = torch.nested.nested_tensor(labels, layout=torch.jagged)
+
+    if not njt:
+        sequences_NJT = torch.nested.to_padded_tensor(sequences_NJT, 0)
+        labels_NJT = torch.nested.to_padded_tensor(labels_NJT, 0)
+
+    return sequences_NJT, labels_NJT

@@ -57,7 +57,6 @@ class WaveGlow(nn.Module):
     def forward(self, input, logdet, reverse, local_condition):
         if not reverse:
             output, logdet = self.squeeze_layer(input, logdet=logdet, rerverse=False)
-            output = input
 
             early_outputs = []
             for i, layer in enumerate(self.layers):
@@ -140,50 +139,29 @@ class WaveGlowLightning(pl.LightningModule):
     # Figure out a better optimizer
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr) # pyright: ignore[reportAttributeAccessIssue]
-
-        # We don't return the lr scheduler becasue we need to apply it per iteration, not per epoch
-        self.lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.max_iters) # pyright: ignore[reportAttributeAccessIssue]
-        
         return optimizer
     
 
-    def optimizer_step(self, epoch: int, batch_idx: int, optimizer, optimizer_closure= None):
-        super().optimizer_step(epoch, batch_idx, optimizer, optimizer_closure)
-        self.lr_scheduler.step()
 
     def training_step(self, batch, batch_idx):
         mel_input, wav_real = batch
 
        # wav_real = self.upsampler(wav_real)
-        logdet = torch.zeros(mel_input.shape[0],device=self.device)
+        logdet = torch.zeros(mel_input.shape[0], device=self.device)
 
-        problem = mel_input.shape[-1] % (self.squeeze_factor)
-
-        problem = self.squeeze_factor - problem
-
-        mel_input = F.pad(mel_input, (problem//2, problem - problem//2), "constant", 0)
-
-        wav_real = F.pad(wav_real, (problem//2, problem - problem//2), "constant", 0)
-        output_wav, logdet = self.model(mel_input, logdet=logdet,reverse=True,local_condition=wav_real)
+        output_wav, logdet = self.model(mel_input, logdet=logdet, reverse=True, local_condition=wav_real)
 
         likelihood = torch.sum(self.normal.log_prob(output_wav), (1,2))
 
-        return -(likelihood + logdet).mean()
-    
+        return -(likelihood +  logdet).mean()
+
+
     def validation_step(self, batch, **kwargs):
         mel_input, wav_real = batch
-
-        problem = mel_input.shape[-1] % (self.squeeze_factor)
-
-        problem = self.squeeze_factor - problem
-
-        mel_input = F.pad(mel_input, (problem//2, problem - problem//2), "constant", 0)
-
-       # wav_real = self.upsampler(wav_real)
+        
+        # wav_real = self.upsampler(wav_real)
         logdet = torch.zeros(mel_input.shape[0], device=self.device)
         output_wav, logdet = self.model(mel_input, logdet=logdet,reverse=True,local_condition=wav_real)
-
-        print(output_wav.device)
 
         likelihood = torch.sum(self.normal.log_prob(output_wav), (1,2))
 

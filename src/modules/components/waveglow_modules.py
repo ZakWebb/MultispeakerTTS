@@ -16,24 +16,26 @@ class SqueezeLayer(nn.Module):
         self.factor = factor
 
     def forward(self, input, logdet=None, reverse=False, **kwargs):
-        sizes = input.size()
         if not reverse:
             assert input.shape[-1] % self.factor == 0
-            output = input.view(sizes[0], sizes[1],  -1, self.factor)
-            output = torch.transpose(output, -1, -2)
-            output = torch.flatten(output, -2,-1)
+            output = input.view(input.size(0), input.size(1), -1, self.factor)
+            output = output.permute(0, 1, 3, 2).contiguous()
+            output = output.view(input.size(0), -1, input.size(-1) // self.factor)
          #   output = input.reshape(input.size(0), input.size(1), -1, self.factor)
         #    output = output.permute(0, 1, 3, 2).contiguous()
         #    output = output.reshape(input.size(0), -1, input.size(-1) // self.factor)
             return output, logdet
         else:
             assert input.shape[-1] % self.factor == 0
+            output = input.view(input.size(0), -1, self.factor, input.size(-1)) 
+            output = output.permute(0, 1, 3, 2).contiguous()
+            output = output.view(input.size(0), input.size(1) // self.factor, -1)
             #output = input.reshape(input.size(0), -1, self.factor, input.size(-1)) 
             #output = output.permute(0, 1, 3, 2).contiguous()
             #output = output.reshape(input.size(0), input.size(1) // self.factor, -1)
-            output = torch.unflatten(input, -1, [self.factor, int(sizes[-1])//self.factor])
-            output = torch.transpose(output, -1, -2)
-            output = torch.flatten(output, -2,-1)
+            #output = torch.unflatten(input, -1, [self.factor, int(sizes[-1])//self.factor])
+            #output = torch.transpose(output, -1, -2)
+            #output = torch.flatten(output, -2,-1)
 
             return output, logdet
 
@@ -201,7 +203,7 @@ class WaveNet(nn.Module):
                 after dilating.
             dilations: A list with the dilation factor for each layer.
             residual_channels: How many filters to learn for the residual.
-            dilation_channels: How many filters to learn fo the dilated
+            dilation_channels: How many filters to learn fr the dilated
                 convolution.
             skip_channels: How many filters to learn that contribute to the 
                 quantized softmax output.

@@ -1,11 +1,10 @@
-import os
-from torch import optim, nn, utils, Tensor
+
 import lightning as L
 
-from modules.vocoders import WaveGlowLightning
+from modules.vocoders import SimpleVocoder
 from data_loader import LJSpeech11
 
-my_model = WaveGlowLightning()
+my_model = SimpleVocoder()
 
 # Figure out a better way to do this with config files
 

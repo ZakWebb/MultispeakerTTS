@@ -29,7 +29,8 @@ class LJSpeech11Data(Dataset):
                  win_length = None,
                  n_mels = 80,
                  fmin = 0.0,
-                 fmax = None,):
+                 fmax = None,
+                 length_divisor=1):
         super().__init__()
         self.input_data_type = input_data_type
         self.output_data_type = output_data_type
@@ -41,6 +42,7 @@ class LJSpeech11Data(Dataset):
 
         self.num_utterances=13100
         self.sr = 22050 # in Hz, this is what we expect from LJSpeech
+        self.length_divisor=length_divisor
 
         if input_data_type == "mel_spectrogram" or output_data_type == "mel_spectrogram":
             ## I need to do some automated checks to ensure that the correct mel_spectrogram is created
@@ -128,6 +130,7 @@ class LJSpeech11(L.LightningDataModule):
                  n_val_workers=23,
                  n_test_workers=23,
                  n_predict_workers=23,
+                 length_divisor=8,
         ):
         super().__init__()
         self.data_dir = data_dir
@@ -152,6 +155,7 @@ class LJSpeech11(L.LightningDataModule):
 
         self.batch_size=batch_size
         self.njt=njt
+        self.length_divisor=length_divisor
 
 
     def setup(self, stage: str):
@@ -167,6 +171,7 @@ class LJSpeech11(L.LightningDataModule):
                                        n_mels=self.n_mels,
                                        fmin=self.fmin,
                                        fmax=self.fmax,
+                                       length_divisor=self.length_divisor,
             )
             self.LJ_train, self.LJ_val = random_split(
                 full_data, [self.train_split_num, 13100 - self.train_split_num], generator=torch.Generator().manual_seed(RANDOM_SEED)
@@ -184,6 +189,7 @@ class LJSpeech11(L.LightningDataModule):
                                           n_mels=self.n_mels,
                                           fmin=self.fmin,
                                           fmax=self.fmax,
+                                          length_divisor=self.length_divisor,
             )
 
         if stage == "test":
@@ -197,6 +203,7 @@ class LJSpeech11(L.LightningDataModule):
                                           n_mels=self.n_mels,
                                           fmin=self.fmin,
                                           fmax=self.fmax,
+                                          length_divisor=self.length_divisor,
             )
 
     def train_dataloader(self):

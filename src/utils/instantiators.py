@@ -53,4 +53,4 @@ def instantiate_loggers(logger_cfg: DictConfig) -> List[Logger]:
             log.info(f"Instantiating logger <{lg_conf._target_}>")
             logger.append(hydra.utils.instantiate(lg_conf))
 
-    return loggers
+    return logger

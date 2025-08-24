@@ -6,6 +6,9 @@ from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification.accuracy import Accuracy
 
 
+# There are a ton of pyright ignores in this file.  I shouldn't have them
+
+
 class MNISTLitModule(LightningModule):
     """Example of a `LightningModule` for MNIST classification.
 
@@ -43,7 +46,7 @@ class MNISTLitModule(LightningModule):
         self,
         net: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler,
+        scheduler: torch.optim.lr_scheduler, # pyright: ignore[reportGeneralTypeIssues]
         compile: bool,
     ) -> None:
         """Initialize a `MNISTLitModule`.
@@ -186,10 +189,10 @@ class MNISTLitModule(LightningModule):
 
         :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
         """
-        if self.hparams.compile and stage == "fit":
+        if self.hparams.compile and stage == "fit": # pyright: ignore[reportAttributeAccessIssue]
             self.net = torch.compile(self.net)
 
-    def configure_optimizers(self) -> Dict[str, Any]:
+    def configure_optimizers(self) -> Dict[str, Any]: # pyright: ignore[reportIncompatibleMethodOverride]
         """Choose what optimizers and learning-rate schedulers to use in your optimization.
         Normally you'd need one. But in the case of GANs or similar you might have multiple.
 
@@ -198,9 +201,9 @@ class MNISTLitModule(LightningModule):
 
         :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
         """
-        optimizer = self.hparams.optimizer(params=self.trainer.model.parameters())
-        if self.hparams.scheduler is not None:
-            scheduler = self.hparams.scheduler(optimizer=optimizer)
+        optimizer = self.hparams.optimizer(params=self.trainer.model.parameters()) # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
+        if self.hparams.scheduler is not None: # pyright: ignore[reportAttributeAccessIssue]
+            scheduler = self.hparams.scheduler(optimizer=optimizer) # pyright: ignore[reportAttributeAccessIssue]
             return {
                 "optimizer": optimizer,
                 "lr_scheduler": {
@@ -214,4 +217,4 @@ class MNISTLitModule(LightningModule):
 
 
 if __name__ == "__main__":
-    _ = MNISTLitModule(None, None, None, None)
+    _ = MNISTLitModule(None, None, None, None) # pyright: ignore[reportArgumentType]

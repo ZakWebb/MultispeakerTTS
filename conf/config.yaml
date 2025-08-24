@@ -1,2 +1,9 @@
-data:
-  db: speech
+defaults:
+  - db_locations: db_file
+  - db: LJSpeech11
+
+n_mels: 80
+win_length: 50 #ns
+hop_length: 12.5 #ns
+
+compute_mel_spectrogram: False

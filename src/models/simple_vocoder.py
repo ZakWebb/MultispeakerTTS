@@ -1,55 +1,27 @@
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+from torch.distributions.normal import Normal
+
+from lightning import LightningModule
+from torchmetrics import MinMetric, MeanMetric
+from torchmetrics.audio import ScaleInvariantSignalNoiseRatio
+
 from typing import Any, Dict, Tuple
 
-import torch
-from lightning import LightningModule
-from torchmetrics import MaxMetric, MeanMetric
-from torchmetrics.classification.accuracy import Accuracy
+import lightning as pl
 
-
-# There are a ton of pyright ignores in this file.  I shouldn't have them
-
-
-class MNISTLitModule(LightningModule):
-    """Example of a `LightningModule` for MNIST classification.
-
-    A `LightningModule` implements 8 key methods:
-
-    ```python
-    def __init__(self):
-    # Define initialization code here.
-
-    def setup(self, stage):
-    # Things to setup before each stage, 'fit', 'validate', 'test', 'predict'.
-    # This hook is called on every process when using DDP.
-
-    def training_step(self, batch, batch_idx):
-    # The complete training step.
-
-    def validation_step(self, batch, batch_idx):
-    # The complete validation step.
-
-    def test_step(self, batch, batch_idx):
-    # The complete test step.
-
-    def predict_step(self, batch, batch_idx):
-    # The complete predict step.
-
-    def configure_optimizers(self):
-    # Define and configure optimizers and LR schedulers.
-    ```
-
-    Docs:
-        https://lightning.ai/docs/pytorch/latest/common/lightning_module.html
-    """
-
+class SimpleVocoderLitModule(pl.LightningModule):
     def __init__(
         self,
         net: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler, # pyright: ignore[reportGeneralTypeIssues]
+        scheduler: torch.optim.lr_scheduler.LRScheduler,
         compile: bool,
     ) -> None:
-        """Initialize a `MNISTLitModule`.
+        """Initialize a `SimpleVocoder`.
 
         :param net: The model to train.
         :param optimizer: The optimizer to use for training.
@@ -64,12 +36,7 @@ class MNISTLitModule(LightningModule):
         self.net = net
 
         # loss function
-        self.criterion = torch.nn.CrossEntropyLoss()
-
-        # metric objects for calculating and averaging accuracy across batches
-        self.train_acc = Accuracy(task="multiclass", num_classes=10)
-        self.val_acc = Accuracy(task="multiclass", num_classes=10)
-        self.test_acc = Accuracy(task="multiclass", num_classes=10)
+        self.criterion = ScaleInvariantSignalNoiseRatio()
 
         # for averaging loss across batches
         self.train_loss = MeanMetric()
@@ -77,7 +44,7 @@ class MNISTLitModule(LightningModule):
         self.test_loss = MeanMetric()
 
         # for tracking best so far validation accuracy
-        self.val_acc_best = MaxMetric()
+        self.val_loss_best = MinMetric()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.
@@ -92,8 +59,7 @@ class MNISTLitModule(LightningModule):
         # by default lightning executes validation step sanity checks before training starts,
         # so it's worth to make sure validation metrics don't store results from these checks
         self.val_loss.reset()
-        self.val_acc.reset()
-        self.val_acc_best.reset()
+        self.val_loss_best.reset()
 
     def model_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor]
@@ -107,10 +73,18 @@ class MNISTLitModule(LightningModule):
             - A tensor of predictions.
             - A tensor of target labels.
         """
-        x, y = batch
-        logits = self.forward(x)
-        loss = self.criterion(logits, y)
-        return loss, logits
+        mels, real_wav = batch
+        computed_wav = self.forward(mels)
+
+        if computed_wav.shape[-1] < real_wav.shape[-1]:
+            real_lengthened = real_wav
+            comp_lengthened = torch.nn.functional.pad(computed_wav, (0,real_wav.shape[-1] - computed_wav.shape[-1]), mode="constant")
+        else:
+            comp_lengthened = computed_wav
+            real_lengthened = torch.nn.functional.pad(real_wav, (0, computed_wav.shape[-1] - real_wav.shape[-1]), mode="constant")
+
+        loss = self.criterion(comp_lengthened, real_lengthened)
+        return loss, computed_wav, real_wav
 
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
@@ -122,13 +96,11 @@ class MNISTLitModule(LightningModule):
         :param batch_idx: The index of the current batch.
         :return: A tensor of losses between model predictions and targets.
         """
-        loss, preds, targets = self.model_step(batch)
+        loss, _, _ = self.model_step(batch)
 
         # update and log metrics
         self.train_loss(loss)
-        self.train_acc(preds, targets)
         self.log("train/loss", self.train_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("train/acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True)
 
         # return loss or backpropagation will fail
         return loss
@@ -144,21 +116,19 @@ class MNISTLitModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        loss, preds, targets = self.model_step(batch)
+        loss, _, _ = self.model_step(batch)
 
         # update and log metrics
         self.val_loss(loss)
-        self.val_acc(preds, targets)
         self.log("val/loss", self.val_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends."
-        acc = self.val_acc.compute()  # get current val acc
-        self.val_acc_best(acc)  # update best so far val acc
+        loss = self.val_loss.compute()  # get current val acc
+        self.val_loss_best(loss)  # update best so far val acc
         # log `val_acc_best` as a value through `.compute()` method, instead of as a metric object
         # otherwise metric would be reset by lightning after each epoch
-        self.log("val/acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
+        self.log("val/loss_best", self.val_loss_best.compute(), sync_dist=True, prog_bar=True)
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         """Perform a single test step on a batch of data from the test set.
@@ -167,13 +137,11 @@ class MNISTLitModule(LightningModule):
             labels.
         :param batch_idx: The index of the current batch.
         """
-        loss, preds, targets = self.model_step(batch)
+        loss, _, _ = self.model_step(batch)
 
         # update and log metrics
         self.test_loss(loss)
-        self.test_acc(preds, targets)
         self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""
@@ -188,10 +156,11 @@ class MNISTLitModule(LightningModule):
 
         :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
         """
-        if self.hparams.compile and stage == "fit": # pyright: ignore[reportAttributeAccessIssue]
+
+        if self.hparams.compile and stage == "fit": 
             self.net = torch.compile(self.net)
 
-    def configure_optimizers(self) -> Dict[str, Any]: # pyright: ignore[reportIncompatibleMethodOverride]
+    def configure_optimizers(self) -> Dict[str, Any]: 
         """Choose what optimizers and learning-rate schedulers to use in your optimization.
         Normally you'd need one. But in the case of GANs or similar you might have multiple.
 
@@ -200,9 +169,9 @@ class MNISTLitModule(LightningModule):
 
         :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
         """
-        optimizer = self.hparams.optimizer(params=self.trainer.model.parameters()) # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
-        if self.hparams.scheduler is not None: # pyright: ignore[reportAttributeAccessIssue]
-            scheduler = self.hparams.scheduler(optimizer=optimizer) # pyright: ignore[reportAttributeAccessIssue]
+        optimizer = self.hparams.optimizer(params=self.trainer.model.parameters()) 
+        if self.hparams.scheduler is not None: 
+            scheduler = self.hparams.scheduler(optimizer=optimizer) 
             return {
                 "optimizer": optimizer,
                 "lr_scheduler": {
@@ -216,4 +185,4 @@ class MNISTLitModule(LightningModule):
 
 
 if __name__ == "__main__":
-    _ = MNISTLitModule(None, None, None, None) # pyright: ignore[reportArgumentType]
+    _ = SimpleVocoderLitModule(None, None, None, None) # pyright: ignore[reportArgumentType]

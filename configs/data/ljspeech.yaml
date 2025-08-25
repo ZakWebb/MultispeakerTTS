@@ -1,0 +1,12 @@
+
+_target_: src.data.LJSpeechDataModule.LJSpeechDataModule
+data_dir: ${oc.env:LJSpeech_data_location}
+batch_size: 32 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
+train_val_test_split: [11_600, 500, 1_000]
+num_workers: 23
+pin_memory: False
+
+input_data_type: "mel_spectrogram"
+output_data_type: "wav_file"
+
+njt : false

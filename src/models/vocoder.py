@@ -6,14 +6,14 @@ import torch.nn.functional as F
 from torch.distributions.normal import Normal
 
 from lightning import LightningModule
-from torchmetrics import MinMetric, MeanMetric
+from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.audio import ScaleInvariantSignalNoiseRatio
 
 from typing import Any, Dict, Tuple
 
 import lightning as pl
 
-class SimpleVocoderLitModule(pl.LightningModule):
+class VocoderLitModule(pl.LightningModule):
     def __init__(
         self,
         net: torch.nn.Module,
@@ -21,7 +21,7 @@ class SimpleVocoderLitModule(pl.LightningModule):
         scheduler: torch.optim.lr_scheduler.LRScheduler,
         compile: bool,
     ) -> None:
-        """Initialize a `SimpleVocoder`.
+        """Initialize a `Vocoder`.
 
         :param net: The model to train.
         :param optimizer: The optimizer to use for training.
@@ -44,7 +44,7 @@ class SimpleVocoderLitModule(pl.LightningModule):
         self.test_loss = MeanMetric()
 
         # for tracking best so far validation accuracy
-        self.val_loss_best = MinMetric()
+        self.val_loss_best = MaxMetric()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.
@@ -103,7 +103,7 @@ class SimpleVocoderLitModule(pl.LightningModule):
         self.log("train/loss", self.train_loss, on_step=False, on_epoch=True, prog_bar=True)
 
         # return loss or backpropagation will fail
-        return loss
+        return -loss
 
     def on_train_epoch_end(self) -> None:
         "Lightning hook that is called when a training epoch ends."
@@ -157,10 +157,10 @@ class SimpleVocoderLitModule(pl.LightningModule):
         :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
         """
 
-        if self.hparams.compile and stage == "fit": 
+        if self.hparams.compile and stage == "fit":  # pyright: ignore[reportAttributeAccessIssue]
             self.net = torch.compile(self.net)
 
-    def configure_optimizers(self) -> Dict[str, Any]: 
+    def configure_optimizers(self) -> Dict[str, Any]:  # pyright: ignore[reportIncompatibleMethodOverride]
         """Choose what optimizers and learning-rate schedulers to use in your optimization.
         Normally you'd need one. But in the case of GANs or similar you might have multiple.
 
@@ -169,9 +169,9 @@ class SimpleVocoderLitModule(pl.LightningModule):
 
         :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
         """
-        optimizer = self.hparams.optimizer(params=self.trainer.model.parameters()) 
-        if self.hparams.scheduler is not None: 
-            scheduler = self.hparams.scheduler(optimizer=optimizer) 
+        optimizer = self.hparams.optimizer(params=self.trainer.model.parameters())  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
+        if self.hparams.scheduler is not None:  # pyright: ignore[reportAttributeAccessIssue]
+            scheduler = self.hparams.scheduler(optimizer=optimizer)  # pyright: ignore[reportAttributeAccessIssue]
             return {
                 "optimizer": optimizer,
                 "lr_scheduler": {
@@ -185,4 +185,4 @@ class SimpleVocoderLitModule(pl.LightningModule):
 
 
 if __name__ == "__main__":
-    _ = SimpleVocoderLitModule(None, None, None, None) # pyright: ignore[reportArgumentType]
+    _ = VocoderLitModule(None, None, None, None) # pyright: ignore[reportArgumentType]

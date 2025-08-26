@@ -43,7 +43,7 @@ train: True
 test: True
 
 # simply provide checkpoint path to resume training
-ckpt_path: null
+ckpt_path: "/home/zak/Github/MultispeakerTTS/logs/train/runs/2025-08-25_19-50-52/checkpoints/last.ckpt"
 
 # seed for random number generators in pytorch, numpy and python.random
 seed: null

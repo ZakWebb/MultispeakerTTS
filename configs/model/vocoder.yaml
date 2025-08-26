@@ -1,4 +1,4 @@
-_target_: src.models.simple_vocoder.SimpleVocoderLitModule
+_target_: src.models.vocoder.VocoderLitModule
 
 optimizer:
   _target_: torch.optim.Adam
@@ -9,17 +9,21 @@ optimizer:
 scheduler:
   _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
   _partial_: true
-  mode: min
+  mode: max
   factor: 0.1
   patience: 10
 
 net:
-  _target_: src.models.components.simple_vocoder.SimpleVocoder
-  input_size: 80
-  lin1_size: 256
-  lin2_size: 256
-  lin3_size: 256
-  output_size: 1
+  _target_: src.models.vocoders.wavenet.WaveNetVocoder
+  filter_width: 2
+  dilation_power: 2
+  dilation_max_power: 8
+  dilation_depth: 12
+  residual_channels: 16
+  dilation_channels: 32
+  skip_channels: 16
+  n_mels: 80
+  local_condition_channels: null
 
 # compile model for faster training with pytorch 2.0
 compile: false

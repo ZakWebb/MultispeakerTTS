@@ -12,26 +12,22 @@ defaults:
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
-tags: ["LJSpeech", "SimpleVocoder"]
+tags: ["LJSpeech", "Vocoder"]
 
 seed: 12345
 
 trainer:
   min_epochs: 10
-  max_epochs: 10
+  max_epochs: 300
   gradient_clip_val: 0.5
 
 model:
   optimizer:
     lr: 0.002
-  net:
-    lin1_size: 256
-    lin2_size: 256
-    lin3_size: 256
   compile: true
 
 data:
-  batch_size: 32
+  batch_size: 64
 
 logger:
   wandb:

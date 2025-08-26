@@ -1,7 +1,6 @@
 import torch
 from torch import nn
 
-
 class SimpleVocoder(nn.Module):
     """A simple fully-connected neural net for computing predictions."""
 

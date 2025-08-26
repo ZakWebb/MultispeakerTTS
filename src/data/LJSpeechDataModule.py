@@ -34,9 +34,6 @@ class LJSpeech11Data(Dataset):
 
         self.num_utterances=13100
 
-        print("input data type: " + input_data_type)
-        print("output_data_type: " + output_data_type)
-
     def __len__(self):
         if self.input_data_type in VALID_DATA_TYPES_LJSPEECH and self.input_data_type in VALID_DATA_TYPES_LJSPEECH:
             return self.num_utterances

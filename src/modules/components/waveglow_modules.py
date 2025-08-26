@@ -173,7 +173,7 @@ class WaveNet(nn.Module):
     
     Usage (with the architecture as in the DeepMind paper):
         dilations = [2**i for i in range(N)] * M
-        filter_width = 2 # Convolutions just use 2 samples
+        filter_width = 1 # Convolutions just use 2 samples
         residual_channels = 16 # Not specified in the paper
         dilation_channels = 32 # Not specified in the paper
         skip_channels = 16 # Not specified in the paper
